@@ -9,12 +9,19 @@ function GetHamiltonian(sites, J::Float64, U::Float64, μ::Float64)
     as a MPO.
     """
     os = OpSum()
-    for j=1:length(sites)-1
+    N = length(sites)
+    for j=1:(N-1)
         os += -J,"Adag",j,"A",j+1
         os += -J,"Adag",j+1,"A",j
         os += 0.5*U,"N",j,"N",j
         os += (-0.5*U-μ),"N",j
     end
+    os += 0.5*U,"N",N,"N",N
+    os += (-0.5*U-μ),"N",N
+
+    # os += -J,"Adag",N,"A",1 # PERIODIC BC
+    # os += -J,"Adag",1,"A",N # PERIODIC BC
+
     return MPO(os,sites)
 end
 
@@ -56,7 +63,7 @@ function GetNumberVariance(psi, sites, i::Int64)
     """
     if i < 0 | i > length(sites)
         error("Site index out of bounds! Use a proper index.")
-        return 
+        return
     end
 
     n = OpSum()
@@ -72,31 +79,41 @@ function SetStartingState(sites, N, d)
     and where the local Hilbert space has dimension d.
     """
     L = length(sites)
-    coefficients = zeros(d^L)
-    # index = Int64((1-d^L)/(1-d)) + 1 # state |11...1> (Julia counts from 1)
-    # vedi note tablet:
-    n = d-1 # maximum number of bosons per site
-    NumFullSites = floor(N/n)
-    index = Int64( (N % n + 1) * d^NumFullSites ) # Julia counts from 1
-    coefficients[index] = 1.0
+    NumFullSites = floor(Int64, N/(d-1))
+    k = NumFullSites + 1
 
-    cutoff = 1E-8
-    maxdim = 10
-    return MPS(coefficients, sites; cutoff=cutoff, maxdim=maxdim)
+    states = ["0" for i in 1:L] # empty sites
+
+    states[1] = string(floor(Int64, N%(d-1))) # remainder
+
+    for i in 2:k # full sites
+        states[i] = string(d-1)
+    end
+
+    circshift!(states, floor(Int64,N/2) - k + floor(Int64,k/2))
+
+    println(states)
+
+    return MPS(sites, "1") # TODO change
 end
 
-function RunDMRGAlgorithm(L::Int64, N::Int64, nmax::Int64, J::Float64, 
-    μ::Float64; verbose=false, U=1.0, calculate_gamma=false)
+function RunDMRGAlgorithm(ModelParameters, DMRGParameters; 
+    verbose=false, U=1.0, calculate_gamma=false)
     """
     Run DMRG algorithm with chosen parameters, and return results.
     Truncate the local Hilbert space with a maximum occupation of nmax.
     The on-site interaction U is by default fixed to 1.
+    Input:
+        - ModelParameters: array of L::Int64, N::Int64, nmax::Int64, J::Float64, 
+            μ::Float64
+        - DMRGParameters: array of nsweeps, maxdim, cutoff
+    Output:
+        - Results of DMRG optimization and relevant observables
     """
-
-    # Set DMRG parameters. TODO analizza
-    nsweeps = 5 
-    maxdim = [10,20,100,100,200]
-    cutoff = [1E-10]
+    L, N, nmax = Int64.(ModelParameters[1:3])
+    J, μ = ModelParameters[4:5]
+    nsweeps, maxdim = DMRGParameters[1:2]
+    cutoff = DMRGParameters[3]
 
     if verbose
         println("Model parameters: L=$L, N=$N, nmax=$nmax, J=$J, U=$U, μ=$μ")
@@ -130,11 +147,13 @@ function RunDMRGAlgorithm(L::Int64, N::Int64, nmax::Int64, J::Float64,
 
     # Calculate relevant observables in the ground state.
     aAvg = zeros(L) # < a_j > (possible order parameter for SF)
+    nMean = zeros(L)
     nVariance = zeros(L) # variance on n_i, for all sites i
     LocalE = zeros(L) # "local part" of contribution to the energy
 
     for i in 1:L
         aAvg[i] = expect(psi, "a"; sites=i)
+        nMean[i] = expect(psi, "n"; sites=i)
         nVariance[i] = GetNumberVariance(psi, sites, i)
         LocalE[i] = inner(psi', GetLocalH(sites, i, J, U, μ), psi)
     end
@@ -148,11 +167,11 @@ function RunDMRGAlgorithm(L::Int64, N::Int64, nmax::Int64, J::Float64,
         end
     end
 
-    return E, aAvg, nVariance, LocalE, Γ
+    return E, aAvg, nMean, nVariance, LocalE, Γ
 end
 
 function CalculatePlotVariance(JJ::Array{Float64}, μμ::Array{Float64}, i::Int64,
-    L::Int64, N::Int64, nmax::Int64)
+    L::Int64, N::Int64, nmax::Int64, DMRGParameters)
     """
     Given the arrays JJ and μμ, and the index site i, calculate, save on file 
     and plot the variance.
@@ -166,7 +185,9 @@ function CalculatePlotVariance(JJ::Array{Float64}, μμ::Array{Float64}, i::Int6
 
     for (i,J) in enumerate(JJ)
         for (j,μ) in enumerate(μμ)
-            _, _, nVariance, _, r = RunDMRGAlgorithm(L, N, nmax, J, μ; verbose=false)
+            ModelParameters = [L, N, nmax, J, μ]
+            _, _, _, nVariance, _, _ = RunDMRGAlgorithm(ModelParameters,
+                                            DMRGParameters)
             vars[j,i] = nVariance[i]
             write(DataFile,"$J, $μ, $(vars[j,i])\n")
         end
@@ -175,18 +196,40 @@ function CalculatePlotVariance(JJ::Array{Float64}, μμ::Array{Float64}, i::Int6
     close(DataFile)
 
     heatmap(JJ, μμ, vars, xlabel=L"J", ylabel=L"μ", 
-    title=L"Variance on $n_i$ ($L=%$L, n_\mathrm{max}=%$nmax, i=%$i$)", size=(600, 400))
+        title=L"Variance on $n_i$ ($L=%$L, n_\mathrm{max}=%$nmax, i=%$i$)", 
+        size=(600, 400))
+    
     savefig("./results/variance.pdf")
 end
 
 function main()
-    # Example of a DMRG run
-    RunDMRGAlgorithm(10, 10, 3, 0.3, 0.5; verbose=true)
+    # Run DMRG for different algorithm parameters, to check
+    # how many sweeps are sufficient for convergence.
+    N = 14
+    L = 14
+    nmax = 3
+    J = 0.3
+    μ = 0.4
 
-    # Calculate and plot variance on n_i, with i=3
-    JJ = collect(range(0.0,0.3,5))
-    mumu = collect(range(0.0,1,5))
-    CalculatePlotVariance(JJ, mumu, 3, 8, 8, 3)
+    nsweep = 5
+    maxlinkdim = [10,50,75,100,100]
+    cutoff = [1E-10]
+    DMRGParameters = [nsweep, maxlinkdim, cutoff]
+
+    E, aAvg, nMean, nVariance, LocalE, Γ = RunDMRGAlgorithm([N, L, nmax, J, μ], DMRGParameters; verbose=true)
+
+    println("\"Local\" part of energy: $(round.(LocalE, digits=4))\n")
+    println("Mean number of particles: $(round.(nMean, digits=4))\n")
+    println("Variance number of particles: $(round.(nVariance, digits=4))\n")
+    println("Relative fluctuation: $(round.(sqrt.(nVariance)./nMean, digits=4))\n")
+
+    # ---------------------
+    # --- Plot Variance ---
+    # ---------------------
+    # # Calculate and plot variance on n_i, with i=3
+    #JJ = collect(range(0.0,0.3,6))
+    #mumu = collect(range(0.0,1,6))
+    #CalculatePlotVariance(JJ, mumu, 3, L, N, nmax, DMRGParameters)
 end
 
 main()
