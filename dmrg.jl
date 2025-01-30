@@ -63,29 +63,7 @@ function GetNumberVariance(psi, sites, i::Int64)
     n += "N",i
     n = MPO(n, sites)
 
-    n2 = OpSum()
-    n2 += "N",i,"N",i
-    n2 = MPO(n2, sites)
-
-    return inner(psi', n2, psi) - inner(psi', n, psi)^2
-end
-
-function GetEnergyVariance(psi, sites, J::Float64, U::Float64, μ::Float64)
-    """
-    Calculate the variance of the energy of state psi (to check that it's
-    actually an eigenstate).
-    """
-    H = GetHamiltonian(sites, J, U, μ)
-
-    n = OpSum()
-    n += "N",i
-    n = MPO(n, sites)
-
-    n2 = OpSum()
-    n2 += "N",i,"N",i
-    n2 = MPO(n2, sites)
-
-    return inner(psi', n2, psi) - inner(psi', n, psi)^2
+    return inner(n, psi, n, psi) - inner(psi', n, psi)^2
 end
 
 function SetStartingState(sites, N, d)
@@ -108,8 +86,8 @@ function SetStartingState(sites, N, d)
 end
 
 function RunDMRGAlgorithm(L::Int64, N::Int64, nmax::Int64, J::Float64, 
-    μ::Float64; verbose=false, U=1.0)
-    """ 
+    μ::Float64; verbose=false, U=1.0, calculate_gamma=false)
+    """
     Run DMRG algorithm with chosen parameters, and return results.
     Truncate the local Hilbert space with a maximum occupation of nmax.
     The on-site interaction U is by default fixed to 1.
@@ -133,9 +111,9 @@ function RunDMRGAlgorithm(L::Int64, N::Int64, nmax::Int64, J::Float64,
     
     # Set starting state and print observables
     psi0 = SetStartingState(sites, N, d)
-    N0 = inner(psi0', Ntot, psi0)
-    E0 = inner(psi0', H, psi0)
     if verbose
+        N0 = inner(psi0', Ntot, psi0)
+        E0 = inner(psi0', H, psi0)
         println("Expectation values on the initial state: N=$N0, E=$E0\n")
     end
 
@@ -156,14 +134,21 @@ function RunDMRGAlgorithm(L::Int64, N::Int64, nmax::Int64, J::Float64,
     LocalE = zeros(L) # "local part" of contribution to the energy
 
     for i in 1:L
-        aAvg[i] = expect(psi, "a"; sites=i) # possible order parameter for the SF
+        aAvg[i] = expect(psi, "a"; sites=i)
         nVariance[i] = GetNumberVariance(psi, sites, i)
         LocalE[i] = inner(psi', GetLocalH(sites, i, J, U, μ), psi)
     end
 
-    # TODO: add calculation of Γ(r) correlator.
+    iCenter = floor(L/2)
+    Γ = zeros(floor(Int64, iCenter/2)) # 2 point correlator Γ(r), r even, r < L/2
+    if calculate_gamma
+        for j in 1:floor(Int64,iCenter/2)
+            Γop = GetTwoPointCorrelator(sites, iCenter-j, iCenter+j)
+            Γ[j] = inner(psi', Γop, psi)
+        end
+    end
 
-    return E, aAvg, nVariance, LocalE
+    return E, aAvg, nVariance, LocalE, Γ
 end
 
 function CalculatePlotVariance(JJ::Array{Float64}, μμ::Array{Float64}, i::Int64,
@@ -181,7 +166,7 @@ function CalculatePlotVariance(JJ::Array{Float64}, μμ::Array{Float64}, i::Int6
 
     for (i,J) in enumerate(JJ)
         for (j,μ) in enumerate(μμ)
-            _, _, nVariance, _ = RunDMRGAlgorithm(L, N, nmax, J, μ; verbose=false)
+            _, _, nVariance, _, r = RunDMRGAlgorithm(L, N, nmax, J, μ; verbose=false)
             vars[j,i] = nVariance[i]
             write(DataFile,"$J, $μ, $(vars[j,i])\n")
         end

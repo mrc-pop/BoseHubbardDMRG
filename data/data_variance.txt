@@ -1,5 +1,5 @@
 # Hubbard model DMRG. L=8, N=8, nmax=3, i=3.
-# J, mu, n_variance [calculated 2025-01-30T09:25:21.072]0.0, 0.0, 0.0
+# J, mu, n_variance [calculated 2025-01-30T10:42:51.910]0.0, 0.0, 0.0
 0.0, 0.25, 0.0
 0.0, 0.5, 0.0
 0.0, 0.75, 0.0
