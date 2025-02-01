@@ -1,31 +1,39 @@
+#/usr/bin/julia
+
 using ITensors, ITensorMPS
 using Plots; pgfplotsx()
 using LaTeXStrings
 using Dates
+using DelimitedFiles
 
 function GetHamiltonian(sites, J::Float64, U::Float64, μ::Float64)
     """
-    Calculate the 1d Bose-Hubbard hamiltonian with open boundary conditions
-    as a MPO.
+    Construct the 1D Bose-Hubbard Hamiltonian as an MPO for given sites,
+    hopping `J`, interaction `U`, and chemical potential `μ`.
     """
     os = OpSum()
-    N = length(sites)
-    for j=1:(N-1)
-        os += -J,"Adag",j,"A",j+1
-        os += -J,"Adag",j+1,"A",j
+    L = length(sites)
+    for j=1:L
+        if j < L
+            os += -J,"Adag",j,"A",j+1
+            os += -J,"Adag",j+1,"A",j
+        end
         os += 0.5*U,"N",j,"N",j
-        os += (-0.5*U-μ),"N",j
+        os += -0.5*U,"N",j
+        os += -μ,"N",j
     end
-    os += 0.5*U,"N",N,"N",N
-    os += (-0.5*U-μ),"N",N
 
-    # os += -J,"Adag",N,"A",1 # PERIODIC BC
-    # os += -J,"Adag",1,"A",N # PERIODIC BC
+    # os += -J,"Adag",L,"A",1 # PERIODIC BC
+    # os += -J,"Adag",1,"A",L # PERIODIC BC
 
     return MPO(os,sites)
 end
 
 function GetLocalH(sites, i, J::Float64, U::Float64, μ::Float64)
+    """
+    Construct the local Hamiltonian term MPO for site `i` in the 1D Bose-Hubbard
+    model with hopping `J`, interaction `U`, and chemical potential `μ`.
+    """
     os = OpSum()
     if i > 1
         os += -J,"Adag",i-1,"A",i
@@ -42,16 +50,21 @@ end
 
 function GetNumber(sites)
     """
-    Calculate the total number operator N as a MPO.
+    Calculate the total number operator `N` as a MPO for the given sites.
     """
     os = OpSum()
     for j=1:length(sites)
         os += "N",j
     end
+
     return MPO(os, sites)
 end
 
 function GetTwoPointCorrelator(sites,i::Int64,j::Int64)
+    """
+    Construct the two-point correlator operator `a_i^+ a_j` as an MPO
+    for sites `i` and `j`.
+    """
     os = OpSum()
     os += "Adag",i,"A",j
     return MPO(os,sites)
@@ -59,7 +72,8 @@ end
 
 function GetNumberVariance(psi, sites, i::Int64)
     """
-    Calculate the variance of the number of particles on site i, on state psi.
+    Calculate the variance of the number of particles on site `i` for the state
+    `psi`.
     """
     if i < 0 | i > length(sites)
         error("Site index out of bounds! Use a proper index.")
@@ -70,35 +84,51 @@ function GetNumberVariance(psi, sites, i::Int64)
     n += "N",i
     n = MPO(n, sites)
 
-    return inner(n, psi, n, psi) - inner(psi', n, psi)^2
+
+    n2 = inner(n, psi, n, psi)
+    n1_squared = inner(psi', n, psi)^2
+
+    # println("For site $i: <n^2> = $n2, <n>^2 = $n1_squared")
+
+    return n2 - n1_squared
 end
 
 function SetStartingState(sites, N, d)
     """
-    Create a MPS on sites (system of size L), made of N particles, 
-    and where the local Hilbert space has dimension d.
+    Create an initial MPS with `N` particles and local Hilbert space dimension
+    `d` on the given sites.
     """
     L = length(sites)
     NumFullSites = floor(Int64, N/(d-1))
     k = NumFullSites + 1
 
+    # For generic N, set |0,...,0,r,d-1,...,d-1,0,...,0>, where r=remainder
     states = ["0" for i in 1:L] # empty sites
-
     states[1] = string(floor(Int64, N%(d-1))) # remainder
-
     for i in 2:k # full sites
         states[i] = string(d-1)
     end
-
     circshift!(states, floor(Int64,N/2) - k + floor(Int64,k/2))
 
-    println(states)
+    # If N=L-1, L or L+1, set a smarmelled initial state
+    if N == L
+        states = ["1" for _ in 1:L]
+    elseif N == (L-1)
+        states = ["1" for _ in 1:L]
+        states[ceil(Int64, L/2)] = "0"
+    elseif N == (L+1)
+        states = ["1" for _ in 1:L]
+        states[ceil(Int64, L/2)] = "2"
+    end
 
-    return MPS(sites, "1") # TODO change
+    # TODO: temp for debug. Show initial state
+    println("Starting state (N=$N) ", states)
+
+    return MPS(sites, states)
 end
 
 function RunDMRGAlgorithm(ModelParameters, DMRGParameters; 
-    verbose=false, U=1.0, calculate_gamma=false)
+    verbose=false, U=1.0, calculate_gamma=false, FixedN=false)
     """
     Run DMRG algorithm with chosen parameters, and return results.
     Truncate the local Hilbert space with a maximum occupation of nmax.
@@ -111,7 +141,9 @@ function RunDMRGAlgorithm(ModelParameters, DMRGParameters;
         - Results of DMRG optimization and relevant observables
     """
     L, N, nmax = Int64.(ModelParameters[1:3])
-    J, μ = ModelParameters[4:5]
+    J = ModelParameters[4]
+    μ = ModelParameters[5]
+    
     nsweeps, maxdim = DMRGParameters[1:2]
     cutoff = DMRGParameters[3]
 
@@ -122,7 +154,10 @@ function RunDMRGAlgorithm(ModelParameters, DMRGParameters;
 
     # Calculate hamiltonian and number operators
     d = nmax + 1
-    sites = siteinds("Boson", L, dim=d; conserve_number=true)
+    sites = siteinds("Boson",
+                    L,
+                    dim=d;
+                    conserve_number = FixedN)
     H = GetHamiltonian(sites, J, U, μ)
     Ntot = GetNumber(sites)
     
@@ -142,7 +177,9 @@ function RunDMRGAlgorithm(ModelParameters, DMRGParameters;
     if verbose
         VarE = inner(H,psi,H,psi) - E^2
         NtotAvg = inner(psi', Ntot, psi)
-        println("\nFinal N: $NtotAvg, variance on E: $VarE\n")
+        println("\nFinal N=$(round(NtotAvg, digits=3)), ", 
+        "E=$(round(E,digits=4)), ",
+        "VarE=$(round(VarE,digits=4))\n")
     end
 
     # Calculate relevant observables in the ground state.
@@ -170,66 +207,32 @@ function RunDMRGAlgorithm(ModelParameters, DMRGParameters;
     return E, aAvg, nMean, nVariance, LocalE, Γ
 end
 
-function CalculatePlotVariance(JJ::Array{Float64}, μμ::Array{Float64}, i::Int64,
-    L::Int64, N::Int64, nmax::Int64, DMRGParameters)
-    """
-    Given the arrays JJ and μμ, and the index site i, calculate, save on file 
-    and plot the variance.
-    """
-    FilePath = "./data/data_variance.txt"
-    DataFile = open(FilePath,"w")
-    write(DataFile,"# Hubbard model DMRG. L=$L, N=$N, nmax=$nmax, i=$i.\n")
-    write(DataFile,"# J, mu, n_variance [calculated $(now())]")
-
-    vars = zeros(length(μμ), length(JJ))
-
-    for (i,J) in enumerate(JJ)
-        for (j,μ) in enumerate(μμ)
-            ModelParameters = [L, N, nmax, J, μ]
-            _, _, _, nVariance, _, _ = RunDMRGAlgorithm(ModelParameters,
-                                            DMRGParameters)
-            vars[j,i] = nVariance[i]
-            write(DataFile,"$J, $μ, $(vars[j,i])\n")
-        end
-    end
-
-    close(DataFile)
-
-    heatmap(JJ, μμ, vars, xlabel=L"J", ylabel=L"μ", 
-        title=L"Variance on $n_i$ ($L=%$L, n_\mathrm{max}=%$nmax, i=%$i$)", 
-        size=(600, 400))
-    
-    savefig("./results/variance.pdf")
-end
-
 function main()
     # Run DMRG for different algorithm parameters, to check
     # how many sweeps are sufficient for convergence.
-    N = 14
-    L = 14
+    L = 10
+    N = 10
     nmax = 3
-    J = 0.3
-    μ = 0.4
+    J = 0.1
+    μ = 0.8
 
     nsweep = 5
-    maxlinkdim = [10,50,75,100,100]
-    cutoff = [1E-10]
+    maxlinkdim = [10,50,75,200,500]
+    cutoff = [1E-13]
     DMRGParameters = [nsweep, maxlinkdim, cutoff]
 
-    E, aAvg, nMean, nVariance, LocalE, Γ = RunDMRGAlgorithm([N, L, nmax, J, μ], DMRGParameters; verbose=true)
+    # ------------------------------
+    # --- Results for single run ---
+    # ------------------------------
+    E, aAvg, nMean, nVariance, LocalE, Γ = RunDMRGAlgorithm([L, N, nmax, J, μ], DMRGParameters; verbose=true)
 
+    println("Energy of ground state: $(round.(E, digits=4))\n")
     println("\"Local\" part of energy: $(round.(LocalE, digits=4))\n")
     println("Mean number of particles: $(round.(nMean, digits=4))\n")
     println("Variance number of particles: $(round.(nVariance, digits=4))\n")
     println("Relative fluctuation: $(round.(sqrt.(nVariance)./nMean, digits=4))\n")
-
-    # ---------------------
-    # --- Plot Variance ---
-    # ---------------------
-    # # Calculate and plot variance on n_i, with i=3
-    #JJ = collect(range(0.0,0.3,6))
-    #mumu = collect(range(0.0,1,6))
-    #CalculatePlotVariance(JJ, mumu, 3, L, N, nmax, DMRGParameters)
 end
 
-main()
+if abspath(PROGRAM_FILE) == @__FILE__ # equivalent to if __name__ == "__main__"
+    main()
+end
