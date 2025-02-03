@@ -131,25 +131,22 @@ function main()
     # ----------------------
     # --- Study Variance ---
     # ----------------------
-    N = 10
-    L = 10
-    JJ = collect(0.0:0.03:0.3)
-    μμ = collect(range(0.0,1,5))
-    i = ceil(Int64, L/2) # site on which to calculate variance
-    #CalculateVariance(JJ, μμ, i, L, N, nmax, DMRGParameters,
+    # N = 10
+    # L = 10
+    # JJ = collect(0.0:0.03:0.3)
+    # μμ = collect(range(0.0,1,5))
+    # i = ceil(Int64, L/2) # site on which to calculate variance
+    # CalculateVariance(JJ, μμ, i, L, N, nmax, DMRGParameters,
     #    "../simulations/data_variance.txt")
 
-    # ----------------------------------
-    # --- Boundary between SF and MI ---
-    # ----------------------------------
-    # LL = [10, 15, 20, 25, 30]
-    μ0 = 0.0
-    CalculatePhaseBoundaries(LL, JJ, nmax, μ0, DMRGParameters, 
-         string(@__DIR__, "/../simulations/phaseboundaries.txt"))
+    # -----------------------------------------------------------
+    # --- Boundary between SF and MI & Correlation function Γ ---
+    # -----------------------------------------------------------
+    JJ = range(start=0.0, stop=0.35, length=100)
+    LL = [100, 200, 300, 400]
+    FilePathOut = string(@__DIR__, "/../simulations/phaseboundaries.txt")
+    CalculateObservables(LL, JJ, nmax, DMRGParameters, FilePathOut)
 
-    # ------------------------------
-    # --- Correlation function Γ ---
-    # ------------------------------
     #CalculateCorrelationFunction([10,20,30,40], collect(0.24:0.02:0.36), 3, 
     #    DMRGParameters, string(@__DIR__, "/../simulations/correlators.txt");
     #    pbc=false)
