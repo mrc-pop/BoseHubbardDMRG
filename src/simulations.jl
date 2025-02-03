@@ -142,7 +142,7 @@ function main()
     # -----------------------------------------------------------
     # --- Boundary between SF and MI & Correlation function Γ ---
     # -----------------------------------------------------------
-    JJ = range(start=0.0, stop=0.35, length=100)
+    JJ = collect(range(start=0.0, stop=0.35, length=100))
     LL = [100, 200, 300, 400]
     FilePathOut = string(@__DIR__, "/../simulations/simulations_server_240203.txt")
     CalculateObservables(LL, JJ, nmax, DMRGParameters, FilePathOut)
