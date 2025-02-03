@@ -86,6 +86,40 @@ function CalculateCorrelationFunction(LL::Array{Int64}, JJ::Array{Float64},
     println("Correlation functions saved to: ", FilePathOut)
 end
 
+
+function CalculateObservables(LL::Array{Int64}, JJ::Array{Float64},
+    nmax::Int64, DMRGParameters, FilePathOut; μ0=0.0)
+    """
+    Calculate two relevant observables for the MI-SF transition.
+        - Phase boundaries,
+        - Correlation function.
+    Use μ0=0 by default (SF phase).
+    """
+
+    DataFile = open(FilePathOut,"w")
+    write(DataFile,"# Hubbard model DMRG. nmax=$nmax, μ0=$μ0.\n")
+    write(DataFile,"# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ [calculated $(now())]\n")
+
+    E = zeros(Float64, 3)
+
+    for L in LL
+        println("Processing L = $L...")
+        for J in JJ
+            E[1], _, _, _, _, _ = RunDMRGAlgorithm([L, L-1, nmax, J, μ0], 
+                                                    DMRGParameters; FixedN = true)
+            E[2], _, _, nVariance, _, Γ = RunDMRGAlgorithm([L, L, nmax, J, μ0], 
+                                                    DMRGParameters; FixedN = true)
+            E[3], _, _, _, _, _ = RunDMRGAlgorithm([L, L+1, nmax, J, μ0], 
+                                                    DMRGParameters; FixedN = true)
+            ΔEplus = E[3] - E[2]
+            ΔEminus = E[2] - E[1]
+            write(DataFile,"$L; $J; $(E[2]); $ΔEplus; $ΔEminus; $nVariance; $Γ\n")
+        end
+    end
+    close(DataFile)
+    println("Data saved on file!")
+end
+
 function main()
     # Set "global" parameters
     nmax = 3
@@ -109,16 +143,16 @@ function main()
     # --- Boundary between SF and MI ---
     # ----------------------------------
     # LL = [10, 15, 20, 25, 30]
-    # μ0 = 0.0
-    # CalculatePhaseBoundaries(LL, JJ, nmax, μ0, DMRGParameters, 
-    #     string(@__DIR__, "/../simulations/phaseboundaries.txt"))
+    μ0 = 0.0
+    CalculatePhaseBoundaries(LL, JJ, nmax, μ0, DMRGParameters, 
+         string(@__DIR__, "/../simulations/phaseboundaries.txt"))
 
     # ------------------------------
     # --- Correlation function Γ ---
     # ------------------------------
-    CalculateCorrelationFunction([10,20,30,40], collect(0.24:0.02:0.36), 3, 
-        DMRGParameters, string(@__DIR__, "/../simulations/correlators.txt");
-        pbc=false)
+    #CalculateCorrelationFunction([10,20,30,40], collect(0.24:0.02:0.36), 3, 
+    #    DMRGParameters, string(@__DIR__, "/../simulations/correlators.txt");
+    #    pbc=false)
 end
 
 main()
