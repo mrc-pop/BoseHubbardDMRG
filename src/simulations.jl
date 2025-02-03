@@ -144,7 +144,7 @@ function main()
     # -----------------------------------------------------------
     JJ = range(start=0.0, stop=0.35, length=100)
     LL = [100, 200, 300, 400]
-    FilePathOut = string(@__DIR__, "/../simulations/phaseboundaries.txt")
+    FilePathOut = string(@__DIR__, "/../simulations/simulations_server_240203.txt")
     CalculateObservables(LL, JJ, nmax, DMRGParameters, FilePathOut)
 
     #CalculateCorrelationFunction([10,20,30,40], collect(0.24:0.02:0.36), 3, 
