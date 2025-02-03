@@ -3,10 +3,11 @@
 using Dates
 using Plots
 using LaTeXStrings
-include("./dmrg.jl")
 
-PROJECT_ROOT = @__DIR__
-PROJECT_ROOT = PROJECT_ROOT * "/.." # Absloute path up to .../BoseHubbardDMRG/
+PROJECT_ROOT = @__DIR__ # Absloute path up to .../BoseHubbardDMRG/convergence/
+
+include(PROJECT_ROOT * "/../src/dmrg.jl")
+include(PROJECT_ROOT * "/../src/graphic_setup.jl")
 
 """
 Parameters to be investigated: 
@@ -49,14 +50,14 @@ if UserMode == "maxm"
 	MaxDims = [x for x in 10:10:100]	# Max dimensions to investigate
 	
 	# File write
-	FilePathOut = PROJECT_ROOT * "/convergence/maxdim_data.txt"
+	FilePathOut = PROJECT_ROOT * "/maxdim_data.txt"
 	DataFile = open(FilePathOut,"w")
 	write(DataFile,"# Hubbard model DMRG. L=$L, N=$N, J=$J, μ=$μ, nmax=$nmax\n")
     write(DataFile,"# maxm, E [calculated $(now()) @ nsweeps=$nSweeps]\n")
 
 	plot(size=(600,400), 
 	     xlabel=L"$\max_m$", ylabel=L"$E_g$",
-	     title=L"Energy after %$nSweeps DMRG sweeps")
+	     title=L"Energy after $%$nSweeps$ DMRG sweeps")
 	for SweepsMaxDim in MaxDims
 		
 		# TODO Improve: use increasing dim for each sweep (mamx locally defined)
