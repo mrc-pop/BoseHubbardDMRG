@@ -2,14 +2,16 @@
 
 using ITensors, ITensorMPS
 using Plots; pgfplotsx()
+using ColorSchemes
 using LaTeXStrings
 using Dates
 using DelimitedFiles
 
-function GetHamiltonian(sites, J::Float64, U::Float64, μ::Float64)
+function GetHamiltonian(sites, J::Float64, U::Float64, μ::Float64; pbc=false)
     """
     Construct the 1D Bose-Hubbard Hamiltonian as an MPO for given sites,
     hopping `J`, interaction `U`, and chemical potential `μ`.
+    If pbc=true, add periodic BC, otherwise open BC. (default: false)
     """
     os = OpSum()
     L = length(sites)
@@ -23,9 +25,10 @@ function GetHamiltonian(sites, J::Float64, U::Float64, μ::Float64)
         os += -μ,"N",j
     end
 
-    # os += -J,"Adag",L,"A",1 # PERIODIC BC
-    # os += -J,"Adag",1,"A",L # PERIODIC BC
-
+    if pbc
+        os += -J,"Adag",L,"A",1
+        os += -J,"Adag",1,"A",L
+    end
     return MPO(os,sites)
 end
 
@@ -128,15 +131,15 @@ function SetStartingState(sites, N, d)
 end
 
 function RunDMRGAlgorithm(ModelParameters, DMRGParameters; 
-    verbose=false, U=1.0, calculate_gamma=false, FixedN=false)
+    verbose=false, U=1.0, calculate_gamma=false, FixedN=false, pbc=false)
     """
     Run DMRG algorithm with chosen parameters, and return results.
     Truncate the local Hilbert space with a maximum occupation of nmax.
     The on-site interaction U is by default fixed to 1.
     Input:
-        - ModelParameters: array of L::Int64, N::Int64, nmax::Int64, J::Float64, 
-            μ::Float64
-        - DMRGParameters: array of nsweeps, maxdim, cutoff
+        - ModelParameters: array of [L::Int64, N::Int64, nmax::Int64, 
+            J::Float64, μ::Float64]
+        - DMRGParameters: array of [nsweeps, maxdim, cutoff]
     Output:
         - Results of DMRG optimization and relevant observables
     """
@@ -158,7 +161,7 @@ function RunDMRGAlgorithm(ModelParameters, DMRGParameters;
                     L,
                     dim=d;
                     conserve_number = FixedN)
-    H = GetHamiltonian(sites, J, U, μ)
+    H = GetHamiltonian(sites, J, U, μ; pbc)
     Ntot = GetNumber(sites)
     
     # Set starting state and print observables
@@ -195,8 +198,9 @@ function RunDMRGAlgorithm(ModelParameters, DMRGParameters;
         LocalE[i] = inner(psi', GetLocalH(sites, i, J, U, μ), psi)
     end
 
-    iCenter = floor(L/2)
-    Γ = zeros(floor(Int64, iCenter/2)) # 2 point correlator Γ(r), r even, r < L/2
+    # 2 point correlator Γ(r), r even, r < L/2
+    iCenter = ceil(Int64, L/2)
+    Γ = zeros(floor(Int64, iCenter/2)) 
     if calculate_gamma
         for j in 1:floor(Int64,iCenter/2)
             Γop = GetTwoPointCorrelator(sites, iCenter-j, iCenter+j)
