@@ -51,25 +51,35 @@ if UserMode == "maxm"
 	
 	# File write
 	FilePathOut = PROJECT_ROOT * "/maxdim_data.txt"
-	DataFile = open(FilePathOut,"w")
-	write(DataFile,"# Hubbard model DMRG. L=$L, N=$N, J=$J, μ=$μ, nmax=$nmax\n")
-    write(DataFile,"# maxm, E [calculated $(now()) @ nsweeps=$nSweeps]\n")
 
-	plot(size=(600,400), 
-	     xlabel=L"$\max_m$", ylabel=L"$E_g$",
-	     title=L"Energy after $%$nSweeps$ DMRG sweeps")
-	for SweepsMaxDim in MaxDims
-		
-		# TODO Improve: use increasing dim for each sweep (mamx locally defined)
-		MaxM = SweepsMaxDim				# Equal dimension for all sweeps
-		DMRGParameters = [nSweeps, MaxM, Cutoff]
-		E, _, _, _, _, _ = RunDMRGAlgorithm(ModelParameters, DMRGParameters; verbose=true)
-		
-		write(DataFile,"$MaxM, $E\n")
-		scatter!([MaxM], [E])
+	compute=false
+	if compute
+	
+		DataFile = open(FilePathOut,"w")
+		write(DataFile,"# Hubbard model DMRG. L=$L, N=$N, J=$J, μ=$μ, nmax=$nmax\n")
+    	write(DataFile,"# maxm, E [calculated $(now()) @ nsweeps=$nSweeps]\n")
+	
+		for SweepsMaxDim in MaxDims
+			
+			# TODO Improve: use increasing dim for each sweep (mamx locally defined)
+			local MaxM = SweepsMaxDim				# Equal dimension for all sweeps
+			DMRGParameters = [nSweeps, MaxM, Cutoff]
+			E, _, _, _, _, _ = RunDMRGAlgorithm(ModelParameters, DMRGParameters; verbose=true)
 
+			write(DataFile,"$MaxM, $E\n")
+
+		end
 	end
 	
+	plot(size=(600,400), 
+	     xlabel=L"$\max_m$", ylabel=L"$E_g$",
+	     formatter = :plain,
+	     title=L"Energy after $%$nSweeps$ DMRG sweeps")
+	    
+	Data = readdlm(FilePathOut, ',', Float64, '\n'; comments=true)
+	xData = Data[:,1]
+	yData = Data[:,2]
+	scatter!(xData, yData, label=L"$\max_m$")
 	savefig(PROJECT_ROOT * "/maxdim_plot.pdf")
 
 elseif UserMode == "nsweeps"
