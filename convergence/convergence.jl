@@ -30,7 +30,7 @@ function RunConvergenceMaxM(MaxMFilePath::String,
 						    ModelParameters::Vector{Float64},
 							nSweeps::Int64,
 							MaxDims::Vector{Int64},
-							Cutoff::Float64)
+							Cutoff::Vector{Float64})
 
 	# First subtest: nsweeps is fixed, investigate maxm
 	
@@ -42,20 +42,18 @@ function RunConvergenceMaxM(MaxMFilePath::String,
 		# TODO Improve: use increasing dim for each sweep (mamx locally defined)
 		local MaxM = SweepsMaxDim				# Equal dimension for all sweeps
 		DMRGParameters = [nSweeps, MaxM, Cutoff]
-		E, _, _, _, _, _ = RunDMRGAlgorithm(ModelParameters, DMRGParameters; verbose=true)
+		E, _, _, _, _, _, psi = RunDMRGAlgorithm(ModelParameters, DMRGParameters; verbose=true)
 
 		write(DataFile,"$MaxM, $E\n")
 
 	end
-	
-	return None
 end
 
 function RunConvergenceNSweeps(NSweepsFilePath::String,
 							   ModelParameters::Vector{Float64},
 							   DMRGSweeps::Vector{Int64},
 							   MaxM::Int64,
-							   Cutoff::Float64)
+							   Cutoff::Vector{Float64})
 
 	# Second subtest: maxm is fixed, investigate nsweeps
 	
@@ -70,8 +68,6 @@ function RunConvergenceNSweeps(NSweepsFilePath::String,
 		write(DataFile,"$nSweeps, $E\n")
 
 	end
-	
-	return None
 end
 
 function main()
@@ -85,7 +81,7 @@ function main()
 	ModelParameters = [L, N, nmax, J, μ]
 	
 	# TODO import DMRG parameters from user input 
-	Cutoff = 1E-12
+	Cutoff = [1E-12]
 
 	ModeErrorMsg = "Input error: use option --maxm or --nsweeps"
 	RunErrorMsg = "Input error: set y or n"
@@ -126,19 +122,11 @@ function main()
 			if run
 				DataFile = open(MaxMFilePath,"w")
 				write(DataFile,Header)
-				println("Running convergence simulations on parameter \"maxm\" using the following model:
-· L = $L
-· N = $N
-· nmax = $nmax
-· J = $J
-· μ = $μ
-and the DMRG setup:
-· nsweeps = $nSweeps
-· cutoff = $Cutoff
-The investigated values of maxm are: $MaxDims")
+				println("Running convergence simulations on parameter \"maxm\". The investigated values of maxm are: $MaxDims")
 				RunConvergenceMaxM(MaxMFilePath,ModelParameters,nSweeps,MaxDims,Cutoff)
 			end
 			
+			println("Plotting...")
 			plot(size=(600,400), 
 				 xlabel=L"$\max_m$", ylabel=L"$E_g$",
 				 formatter = :plain,
@@ -161,19 +149,11 @@ The investigated values of maxm are: $MaxDims")
 			if run
 				DataFile = open(NSweepsFilePath,"w")
 				write(DataFile,Header)
-				println("Running convergence simulations on parameter \"nsweeps\" using the following model:
-· L = $L
-· N = $N
-· nmax = $nmax
-· J = $J
-· μ = $μ
-and the DMRG setup:
-· maxm = $MaxM
-· cutoff = $Cutoff
-The investigated values of nsweeps are: $DMRGSweeps")
+				println("Running convergence simulations on parameter \"nsweeps\". The investigated values of nsweeps are: $DMRGSweeps")
 				RunConvergenceNSweeps(NSweepsFilePath,ModelParameters,DMRGSweeps,MaxM,Cutoff)
 			end
 		
+			println("Plotting...")
 			plot(size=(600,400), 
 				 xlabel=L"$n_\mathrm{sw}$", ylabel=L"$E_g$",
 				 formatter = :plain,
