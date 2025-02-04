@@ -4,7 +4,7 @@ using LsqFit
 
 # Include the dmrg.jl file
 include("./dmrg.jl")
-include(PROJECT_ROOT * "/../src/graphic_setup.jl")
+include(string(@__DIR__, "/../src/graphic_setup.jl"))
 
 function PlotVariance(FilePath::String, L, nmax, i)
     """
@@ -33,46 +33,72 @@ function PlotVariance(FilePath::String, L, nmax, i)
     println("Variance plot saved on file!")
 end
 
-function PlotPhaseBoundaries(FilePath::String, LL::Array{Int64}, μ0::Float64; 
-    gap=false, overwrite=true)
+function PlotPhaseBoundaries(FilePathIn::String; 
+    FilePathOut="", gap=false, overwrite=true, CustomLL=[], μ0=0.0)
     """
     Plot the phase boundaries between the Mott Insulator (MI) and Superfluid 
-    (SF) phases. If gap=true, plot the charge gap instead of the phase 
-    boundaries. If overwrite=true, clears previous plots. 
+    (SF) phases, calculated from CalculateObservables.
+    If gap=true, plot the charge gap instead of the phase boundaries.
+    If overwrite=true, clears previous plots. 
+    If CustomLL specified, plot only those sizes.
     """
-    BoundariesData = readdlm(FilePath, ',', Float64, '\n'; comments=true)
+    BoundariesData = readdlm(FilePathIn, ';', '\n'; comments=true)
 
     if overwrite
         plot()
     end
 
-    for L in LL
+    # Extract unique L values
+    if CustomLL==[]
+        LL = unique(BoundariesData[:, 1])
+    else
+        LL = CustomLL
+    end
+
+    # Get color scheme
+    MyColors = ColorSchemes.tab10
+
+    for (l, L) in enumerate(LL)
         indices = (BoundariesData[:, 1] .== L)
         JJ = BoundariesData[indices,2]
-        ΔEplus = BoundariesData[indices,3]
-        ΔEminus = BoundariesData[indices,4]
+        ΔEplus = BoundariesData[indices,4]
+        ΔEminus = BoundariesData[indices,5]
         
         if gap
             plot!(JJ, ΔEplus - ΔEminus, 
-                size=(600, 400),
-                label=false,
                 xlabel=L"$J$", ylabel=L"$\Delta E_{\mathrm{gap}}$", 
                 title=L"Charge gap  as a function of $J$ ($\mu_0=%$μ0$)",
-                linestyle=:dot)
+                seriestype=:scatter,
+                markersize=1.5,
+                label=L"$L=%$L$",
+                color=MyColors[l % length(MyColors)])
         else
-            plot!(JJ, [μ0 .+ ΔEminus, μ0 .+ ΔEplus], 
-            xlabel=L"$J$", ylabel=L"$\mu$",
-            size=(600, 400), 
-            label=[L"$\mu_c^- (L=%$L)$" L"$\mu_c^+ (L=%$L)$"],
-            title=L"Extrapolation of $\mu_c^\pm(J)$ ($\mu_0=%$μ0$)",
-            seriestype=:scatter,
-            markersize=3)
+            plot!(JJ, μ0 .+ ΔEminus, 
+                xlabel=L"$J$", ylabel=L"$\mu$",
+                label=L"$L=%$L$",
+                title=L"Extrapolation of $\mu_c^\pm(J)$ ($\mu_0=%$μ0$)",
+                seriestype=:scatter,
+                markersize=1.5,
+                color=MyColors[l % length(MyColors)])
+            plot!(JJ, μ0 .+ ΔEplus, seriestype=:scatter,
+                label="",
+                markersize=1.5,
+                color=MyColors[l % length(MyColors)])
+        end
+    end
+    if !=(FilePathOut,"")
+        savefig(FilePathOut)
+        if gap
+            println("Gap for L=$(Int.(LL)) plotted to ", FilePathOut)
+        else
+            println("Phase boundaries for L=$(Int.(LL)) plotted to ", FilePathOut)
         end
     end
 end
 
-function FitPhaseBoundaries(FilePathIn::String, FilePathOut::String; 
-    makeplot=false, makesinglefitplot=false)
+function FitPhaseBoundaries(FilePathIn::String, FilePathOut::String;
+    FilePathPlotOut="", FilePathSinglePlotOut="")
+    #makeplot=false, makesinglefitplot=false)
     """
     Fit ΔEplus(L) and ΔEminus(L) as functions of 1/L for each J, and extract 
     their values at L -> ∞. Save the results to a file. 
@@ -83,7 +109,7 @@ function FitPhaseBoundaries(FilePathIn::String, FilePathOut::String;
     """
 
     # Read the input data
-    data = readdlm(FilePathIn, ',', Float64, '\n'; comments=true)
+    data = readdlm(FilePathIn, ';', '\n'; comments=true)
 
     # Extract unique J values
     JJ = unique(data[:, 2])
@@ -104,8 +130,8 @@ function FitPhaseBoundaries(FilePathIn::String, FilePathOut::String;
         # Filter data for the current J
         filter = (data[:, 2] .== J)
         L = data[filter, 1]
-        ΔEplus = data[filter, 3]
-        ΔEminus = data[filter, 4]
+        ΔEplus = data[filter, 4]
+        ΔEminus = data[filter, 5]
 
         inv_L = 1.0 ./ L
 
@@ -129,8 +155,11 @@ function FitPhaseBoundaries(FilePathIn::String, FilePathOut::String;
         push!(chi2_plus, chi2p)
         push!(chi2_minus, chi2m)
 
+        # Get color scheme
+        MyColors = ColorSchemes.tab10
+
         # Plot the fit results for one specific J if makesinglefitplot=true
-        if makesinglefitplot && J == JJ[8] # TODO change which one to plot
+        if FilePathSinglePlotOut != "" && J == maximum(JJ)
             # Define the best-fit lines
             fit_x = range(minimum(inv_L), maximum(inv_L), length=100)
             fit_y_plus = fit_func(fit_x, fit_plus.param)
@@ -138,12 +167,16 @@ function FitPhaseBoundaries(FilePathIn::String, FilePathOut::String;
 
             # Plot the data and best-fit lines
             scatter(inv_L, ΔEplus, label=L"$\Delta E^+$ data", xlabel=L"1/L", 
-                ylabel=L"$\Delta E$", title="Fit results for J = $(J)")
-            plot!(fit_x, fit_y_plus, label=L"$\Delta E^+$ fit")
-            scatter!(inv_L, ΔEminus, label=L"$\Delta E^-$ data")
-            plot!(fit_x, fit_y_minus, label=L"$\Delta E^-$ fit")
+                ylabel=L"$\Delta E$", title="Fit results for J = $(J)",
+                legend=:topleft, markersize=2, color=MyColors[1])
+            plot!(fit_x, fit_y_plus, label=L"$\Delta E^+$ fit", color=MyColors[1],
+                alpha=0.7)
+            scatter!(inv_L, ΔEminus, label=L"$\Delta E^-$ data", markersize=2,
+                color=MyColors[2])
+            plot!(fit_x, fit_y_minus, label=L"$\Delta E^-$ fit", color=MyColors[2],
+                alpha=0.7)
 
-            savefig(string(@__DIR__,"/../analysis/phaseboundaries_singleplot.pdf"))
+            savefig(FilePathSinglePlotOut)
         end
     end
 
@@ -160,12 +193,17 @@ function FitPhaseBoundaries(FilePathIn::String, FilePathOut::String;
 
     println("Fitted results saved to: ", FilePathOut)
     
-    if makeplot
+    if FilePathPlotOut != ""
+        # PlotPhaseBoundaries(FilePathIn; gap=false, overwrite=true)
+        plot()
         plot!(JJ,
               [ΔEplus_fit ΔEminus_fit],
-              label=[L"$\mu_c^+$ (fitted)" L"$\mu_c^-$ (fitted)"], 
+              label=[L"\mu_c^+ \, (L \rightarrow \infty)" L"\mu_c^- \, (L \rightarrow \infty)"], 
               xlabel=L"J", ylabel=L"$\mu$", 
-              title="Fitted phase boundaries")
+              title="Fitted phase boundaries",
+              alpha=1.0)
+        savefig(FilePathPlotOut)
+        println("Phase boundaries fit plotted to ", FilePathOut)
     end
 end
 
@@ -179,15 +217,21 @@ function FitCorrelationFunction(FilePathIn::String, FilePathOut::String)
     data = readdlm(FilePathIn, ';', '\n'; comments=true)
 
     # Extract unique J, L values
-    JJ = unique(data[:, 1])
-    LL = unique(data[:, 2])
+    JJ = unique(data[:, 2])
+    LL = unique(data[:, 1])
+
+    println("JJ = $JJ")
+    println(" LL = $LL")
+
+    # TODO CAMBIA
+    # JJ = JJ[50:end]
 
     # Mastruzzo to extract array of Γ
     function parse_array(str)
         return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
     end
-    Γall = [parse_array(row[3]) for row in eachrow(data)]
-    # display(Γall) # (TODO check, but it seems to work)
+    Γall = [parse_array(row[7]) for row in eachrow(data)]
+    display(Γall) # (TODO check, but it seems to work)
 
     # Define the fit function [power-law fit of Γ(r)]
     fit_func(x, p) = p[1]*x.^(-p[2]/2) # TODO disastri con 3 parametri
@@ -205,10 +249,10 @@ function FitCorrelationFunction(FilePathIn::String, FilePathOut::String)
 
         for L in LL
             # Filter data for the current J and L
-            filter = (data[:, 1] .== J) .& (data[:, 2] .== L)
+            filter = (data[:, 2] .== J) .& (data[:, 1] .== L)
 
             # Extract the correlators {Γ(r,J,L)}_r for the selected J,L
-            Γeven = Γall[filter][1] # this is an array, Γ(r even)
+            Γeven = Γall[filter] # this is an array, Γ(r even)
             r = range(start=2, step=2, length=length(Γeven)) # r even
 
             println("Fitting J=$J, L=$L, r=$r.")
@@ -216,18 +260,18 @@ function FitCorrelationFunction(FilePathIn::String, FilePathOut::String)
             # Perform the fit of Γ(r) vs r, at fixed (J,L).
             # The argument w means weights, they should equal 1/σ^2. 
             # weights = 1.0 ./ e_Γeven.^2 # TODO estimate errors for Γeven!
-            fit = curve_fit(fit_func, r, Γeven, p0) # w=weights 
+            # fit = curve_fit(fit_func, r, Γeven, p0) # w=weights 
 
-            println("Best-fit parameters:", fit.param)
+            # println("Best-fit parameters:", fit.param)
 
-            K_JL = fit.param[2] # K(J,L)
-            e_K_JL = stderror(fit)[2]
-            chi2n = sum(fit.resid.^2) / (length(r) - length(p0))
-            push!(K_FSS, K_JL)
-            push!(e_K_FSS, e_K_JL)
-            push!(chi2n_FSS, chi2n)
+            # K_JL = fit.param[2] # K(J,L)
+            # e_K_JL = stderror(fit)[2]
+            # chi2n = sum(fit.resid.^2) / (length(r) - length(p0))
+            # push!(K_FSS, K_JL)
+            # push!(e_K_FSS, e_K_JL)
+            # push!(chi2n_FSS, chi2n)
 
-            if J == JJ[5] && L == LL[4]
+            if J == maximum(JJ) && L == minimum(LL)
                 # Make a single plot, hopefully representative of the first
                 # series of fits. Save the results.
                 scatter(r, Γeven,
@@ -236,10 +280,10 @@ function FitCorrelationFunction(FilePathIn::String, FilePathOut::String)
                     title=L"Correlation function ($L=%$L, J=%$J, \mu=1.0$)",
                     label="DMRG data",
                     legend=:topright)
-                fit_x = range(1.0, maximum(r), length=80)
-                fit_y = fit_func(fit_x, fit.param)
-                K_JL_plot = round(K_JL, digits=2)
-                plot!(fit_x, fit_y, label=L"Best-fit ($K=%$K_JL_plot$)")
+                #fit_x = range(1.0, maximum(r), length=80)
+                #fit_y = fit_func(fit_x, fit.param)
+                #K_JL_plot = round(K_JL, digits=2)
+                #plot!(fit_x, fit_y, label=L"Best-fit ($K=%$K_JL_plot$)")
                 savefig(string(@__DIR__,"/../analysis/correlators_singleplot.pdf"))
             end
         end
@@ -257,7 +301,7 @@ function FitCorrelationFunction(FilePathIn::String, FilePathOut::String)
         push!(e_K, e_K_J)
         push!(chi2n_K, chi2n_J)
 
-        if J == JJ[5]
+        if J == maximum(JJ)
             # Make a single FSS plot, hopefully representative of the second
             # series of fits. Save the results.
             fit_x = range(0.0, maximum(inv_LL), length=50)
@@ -293,13 +337,13 @@ end
 
 
 function main()    
-    L = 10
-    N = 10
-    nmax = 3
-    JJ = collect(range(0.0,0.3,5))
-    μμ = collect(range(0.0,1,5))
-    i = ceil(Int64, L/2) # site on which to calculate variance
-    μ0 = 0.0
+    # L = 10
+    # N = 10
+    # nmax = 3
+    # JJ = collect(range(0.0,0.3,5))
+    # μμ = collect(range(0.0,1,5))
+    # i = ceil(Int64, L/2) # site on which to calculate variance
+    # μ0 = 0.0
 
     # ---------------------
     # --- Plot Variance ---
@@ -310,22 +354,24 @@ function main()
     # ----------------------------------
     # --- Boundary between SF and MI ---
     # ----------------------------------
-    # LL = [10,20,30]
-    # FilePathIn = string(@__DIR__, "/../simulations/phaseboundaries.txt")
-    # # FilePathPlot = string(@__DIR__, "/../analysis/phaseboundaries.pdf")
-    # FilePathFit = string(@__DIR__, "/../analysis/phaseboundaries_fitted.txt")
+    FilePathIn = string(@__DIR__, "/../simulations/simulations_240204.txt")
 
-    # PlotPhaseBoundaries(FilePathIn, LL, μ0)
-    # FitPhaseBoundaries(FilePathIn, FilePathFit; makeplot=true, makesinglefitplot=false)
+    PhaseBoundariesDir = string(@__DIR__, "/../analysis/phase_boundaries/")
+    FilePathPlot = PhaseBoundariesDir*"phaseboundaries_240204.pdf"
+    FilePathFit = PhaseBoundariesDir*"fitted_phase_boundaries.txt"
 
-    # savefig(string(@__DIR__,"/../analysis/phaseboundaries.pdf"))
+    PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut = FilePathPlot)
+
+    FitPhaseBoundaries(FilePathIn, FilePathFit; 
+        FilePathPlotOut=PhaseBoundariesDir*"phaseboundaries_240204_fit.pdf",
+        FilePathSinglePlotOut=PhaseBoundariesDir*"phaseboundaries_240204_fit_single.pdf")
     
     # ------------------------------
     # --- Correlation function Γ ---
     # ------------------------------
-    FilePathIn = string(@__DIR__, "/../simulations/correlators.txt")
-    FilePathFit = string(@__DIR__, "/../analysis/correlators_fitted.txt")
-    FitCorrelationFunction(FilePathIn, FilePathFit)
+    # FilePathIn = string(@__DIR__, "/../simulations/simulations_server_240203.txt")
+    # FilePathFit = string(@__DIR__, "/../analysis/correlators_fitted_server.txt")
+    # FitCorrelationFunction(FilePathIn, FilePathFit)
 end
 
 main()

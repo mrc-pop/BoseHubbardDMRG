@@ -3,7 +3,7 @@
 # Set default options for plotting
 
 Plots.default(
-    size = (550, 400),
+    size = (440, 320),
     bgcolor = :white,
     palette = :seaborn_colorblind,
     
@@ -19,24 +19,18 @@ Plots.default(
     tick_direction = :in,
     minorticks = true,
     
-    # fontfamily = "Computer Modern",
-    # legendfontfamily = "Computer Modern",
-    # titlefontfamily = "Computer Modern",
-    # guidefontfamily = "Computer Modern",
-    # tickfontfamily = "Computer Modern",
-    
     legend_background_color = nothing,
     legend=:topright,
     legend_foreground_color= nothing,
     legend_font_halign=:center,
 
-    plot_titlefontsize = 12,
+    titlefontsize=12,
     legendfontsize = 9,
     guidefontsize = 10,
     tickfontsize = 10,
 
     markerstrokewidth=0,
-    margin = 5Plots.mm,
+    #margin = 1Plots.mm,
     framestyle = :box,
 )
 

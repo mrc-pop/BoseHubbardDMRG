@@ -124,8 +124,8 @@ function SetStartingState(sites, N, d)
         states[ceil(Int64, L/2)] = "2"
     end
 
-    # TODO: temp for debug. Show initial state
-    println("Starting state (N=$N) ", states)
+    # For debugging only
+    # println("Starting state (N=$N) ", states)
 
     return MPS(sites, states)
 end
@@ -208,7 +208,7 @@ function RunDMRGAlgorithm(ModelParameters, DMRGParameters;
         end
     end
 
-    return E, aAvg, nMean, nVariance, LocalE, Γ
+    return E, aAvg, nMean, nVariance, LocalE, Γ, psi
 end
 
 function main()
