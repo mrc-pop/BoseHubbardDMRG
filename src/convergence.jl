@@ -1,13 +1,14 @@
-#/usr/bin/julia
+#!/usr/bin/julia
 
 using Dates
 using Plots
 using LaTeXStrings
 
-PROJECT_ROOT = @__DIR__ # Absloute path up to .../BoseHubbardDMRG/convergence/
+PROJECT_ROOT = @__DIR__ # Absloute path up to .../BoseHubbardDMRG/src
+PROJECT_ROOT *= "/.."	# Absloute path up to .../BoseHubbardDMRG/
 
-include(PROJECT_ROOT * "/../src/dmrg.jl")
-include(PROJECT_ROOT * "/../src/graphic_setup.jl")
+include(PROJECT_ROOT * "/src/dmrg.jl")
+include(PROJECT_ROOT * "/src/graphic_setup.jl")
 
 """
 Parameters to be investigated: 
@@ -26,7 +27,7 @@ setting (L,N) and analyze eventual saturation of the observables.
 
 # TODO Print also maxlinkdim (screen printed)
 
-function RunConvergenceMaxM(MaxMFilePath::String,
+function RunConvergenceMaxM(FilePathOut::String,
 						    ModelParameters::Vector{Float64},
 							nSweeps::Int64,
 							MaxDims::Vector{Int64},
@@ -34,7 +35,7 @@ function RunConvergenceMaxM(MaxMFilePath::String,
 
 	# First subtest: nsweeps is fixed, investigate maxm
 	
-	DataFile = open(MaxMFilePath,"a")
+	DataFile = open(FilePathOut,"a")
 	write(DataFile,"# maxm, E [calculated $(now()) @ nsweeps=$nSweeps]\n")
 
 	for SweepsMaxDim in MaxDims
@@ -42,28 +43,47 @@ function RunConvergenceMaxM(MaxMFilePath::String,
 		# TODO Improve: use increasing dim for each sweep (mamx locally defined)
 		local MaxM = SweepsMaxDim				# Equal dimension for all sweeps
 		DMRGParameters = [nSweeps, MaxM, Cutoff]
-		E, _, _, _, _, _, psi = RunDMRGAlgorithm(ModelParameters, DMRGParameters; verbose=true)
+		E, _, _, = RunDMRGAlgorithm(ModelParameters,
+									DMRGParameters;
+									ComputeAllObservables=false,
+									ComputeGamma=false,
+									verbose=true)
+		
+		"""
+		False setting of ComputeAllObservables and ComputeGamma is redundant,
+		being false the default value; inserted for code clarity.
+		"""
 
 		write(DataFile,"$MaxM, $E\n")
 
 	end
 end
 
-function RunConvergenceNSweeps(NSweepsFilePath::String,
+function RunConvergenceNSweeps(FilePathOut::String,
 							   ModelParameters::Vector{Float64},
 							   DMRGSweeps::Vector{Int64},
 							   MaxM::Int64,
 							   Cutoff::Vector{Float64})
 
 	# Second subtest: maxm is fixed, investigate nsweeps
+	# TODO Evaluate if to extract more observables; by default
 	
-	DataFile = open(NSweepsFilePath,"a")
+	DataFile = open(FilePathOut,"a")
     write(DataFile,"# nsweeps, E [calculated $(now()) @ maxm=$MaxM]\n")
 
 	for nSweeps in DMRGSweeps
 	
 		DMRGParameters = [nSweeps, MaxM, Cutoff]
-		E, _, _, _, _, _, psi = RunDMRGAlgorithm(ModelParameters, DMRGParameters; verbose=true)
+		E, _, _, = RunDMRGAlgorithm(ModelParameters,
+									DMRGParameters;
+									ComputeAllObservables=false,
+									ComputeGamma=false,
+									verbose=true)
+		
+		"""
+		False setting of ComputeAllObservables and ComputeGamma is redundant,
+		being false the default value; inserted for code clarity.
+		"""
 		
 		write(DataFile,"$nSweeps, $E\n")
 
@@ -117,13 +137,13 @@ function main()
 		
 			nSweeps = 5
 			MaxDims = [x for x in 10:10:100]	# Max dimensions to investigate
-			MaxMFilePath = PROJECT_ROOT * "/maxdim_data.txt"
+			FilePathOut = PROJECT_ROOT * "/convergence/maxdim_data.txt"
 			
 			if run
-				DataFile = open(MaxMFilePath,"w")
+				DataFile = open(FilePathOut,"w")
 				write(DataFile,Header)
 				println("Running convergence simulations on parameter \"maxm\". The investigated values of maxm are: $MaxDims")
-				RunConvergenceMaxM(MaxMFilePath,ModelParameters,nSweeps,MaxDims,Cutoff)
+				RunConvergenceMaxM(FilePathOut,ModelParameters,nSweeps,MaxDims,Cutoff)
 			end
 			
 			println("Plotting...")
@@ -132,11 +152,11 @@ function main()
 				 formatter = :plain,
 				 title=L"Energy after $%$nSweeps$ DMRG sweeps")
 
-			Data = readdlm(MaxMFilePath, ',', Float64, '\n'; comments=true)
+			Data = readdlm(FilePathOut, ',', Float64, '\n'; comments=true)
 			xData = Data[:,1]
 			yData = Data[:,2]
 			scatter!(xData, yData, label=L"$\max_m$")
-			savefig(PROJECT_ROOT * "/maxdim_plot.pdf")
+			savefig(PROJECT_ROOT * "/convergence/maxdim_plot.pdf")
 			
 		elseif UserMode == "--nsweeps"
 		
@@ -144,13 +164,13 @@ function main()
 		
 			MaxM = 200
 			DMRGSweeps = [x for x in 2:2:20]	# Number of sweeps to investigate
-			NSweepsFilePath = PROJECT_ROOT * "/nsweeps_data.txt"
+			FilePathOut = PROJECT_ROOT * "/convergence/nsweeps_data.txt"
 			
 			if run
-				DataFile = open(NSweepsFilePath,"w")
+				DataFile = open(FilePathOut,"w")
 				write(DataFile,Header)
 				println("Running convergence simulations on parameter \"nsweeps\". The investigated values of nsweeps are: $DMRGSweeps")
-				RunConvergenceNSweeps(NSweepsFilePath,ModelParameters,DMRGSweeps,MaxM,Cutoff)
+				RunConvergenceNSweeps(FilePathOut,ModelParameters,DMRGSweeps,MaxM,Cutoff)
 			end
 		
 			println("Plotting...")
@@ -159,11 +179,11 @@ function main()
 				 formatter = :plain,
 				 title=L"Energy using $%$MaxM$ max bond link")
 				
-			Data = readdlm(NSweepsFilePath, ',', Float64, '\n'; comments=true)
+			Data = readdlm(FilePathOut, ',', Float64, '\n'; comments=true)
 			xData = Data[:,1]
 			yData = Data[:,2]
 			scatter!(xData, yData, label=L"$n_\mathrm{sw}$")
-			savefig(PROJECT_ROOT * "/nsweeps_plot.pdf")
+			savefig(PROJECT_ROOT * "/convergence/nsweeps_plot.pdf")
 			
 		else
 			error(ModeErrorMsg)

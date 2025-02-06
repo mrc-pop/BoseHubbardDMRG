@@ -1,13 +1,29 @@
-#/usr/bin/julia
+#!/usr/bin/julia
+
+PROJECT_ROOT = @__DIR__ # Absloute path up to .../BoseHubbardDMRG/src
 
 # Include the dmrg.jl file
-include("./dmrg.jl")
+include(PROJECT_ROOT * "/dmrg.jl")
 
-function CalculateVariance(JJ::Array{Float64}, μμ::Array{Float64}, i::Int64,
-    L::Int64, N::Int64, nmax::Int64, DMRGParameters, FilePathOut)
+PROJECT_ROOT *= "/.."	# Absloute path up to .../BoseHubbardDMRG/
+
+# TODO Add """[overall introduction]"""
+
+# -----------------
+# --- Functions ---
+# -----------------
+
+function RectangularSweep(i::Int64,
+    					  L::Int64,
+    					  N::Int64,
+    					  nmax::Int64,
+    					  JJ::Vector{Float64},				# Horizontal sweep
+						  μμ::Vector{Float64},				# Vertical sweep
+    					  DMRGParameters::Vector{Any},
+    					  FilePathOut::String)
     """
-    Calculate the variance of the number of particles on site `i` for a range of
-    hopping `J` and chemical potential `μ` values. Results are saved to a file.
+    Calculate the variance of the number of particles on site i for a range of
+    hopping J and chemical potential μ values. Results are saved to a file.
     """
     DataFile = open(FilePathOut,"w")
     write(DataFile,"# Hubbard model DMRG. L=$L, N=$N, nmax=$nmax, i=$i.\n")
@@ -18,7 +34,7 @@ function CalculateVariance(JJ::Array{Float64}, μμ::Array{Float64}, i::Int64,
     for J in JJ
         for μ in μμ
             ModelParameters = [L, N, nmax, J, μ]
-            _, _, _, nVariance, _, _, _ = RunDMRGAlgorithm(ModelParameters,
+            _, _, _, nVariance, _, Γ, _ = RunDMRGAlgorithm(ModelParameters,
                                             DMRGParameters; FixedN = false)
             write(DataFile,"$J, $μ, $(nVariance[i])\n")
         end
@@ -87,14 +103,21 @@ end
 # end
 
 
-function CalculateObservables(LL::Array{Int64}, JJ::Array{Float64},
-    nmax::Int64, DMRGParameters, FilePathOut; μ0=0.0)
+function HorizontalSweep(LL::Array{Int64},
+						 nmax::Int64,
+						 JJ::Array{Float64},
+    					 DMRGParameters::Vector{Any},    					 
+    					 FilePathOut::String; 
+    					 μ0=0.0)
+    					 
     """
     Calculate two relevant observables for the MI-SF transition.
         - Phase boundaries,
         - Correlation function.
     Use μ0=0 by default (SF phase).
     """
+    
+    # TODO Generalize this function for N!=L
 
     DataFile = open(FilePathOut,"w")
     write(DataFile,"# Hubbard model DMRG. nmax=$nmax, μ0=$μ0.\n")
@@ -106,16 +129,21 @@ function CalculateObservables(LL::Array{Int64}, JJ::Array{Float64},
         println("\n Starting calculation of observables for L=$L...\n")
         for (j, J) in enumerate(JJ)
             println("Running DMRG for J=$(round(J,digits=3)), μ=$μ0 (simulation ",
-            "$j/$(length(JJ)) for L=$L)")
-            E[1], _, _, _, _, _, _ = RunDMRGAlgorithm([L, L-1, nmax, J, μ0], 
-                                    DMRGParameters; calculate_gamma=true, 
-                                    FixedN = true)
-            E[2], _, _, nVariance, _, Γ, _ = RunDMRGAlgorithm([L, L, nmax, J, μ0], 
-                                            DMRGParameters;  calculate_gamma=true,
-                                            FixedN = true)
-            E[3], _, _, _, _, _, _ = RunDMRGAlgorithm([L, L+1, nmax, J, μ0], 
-                                    DMRGParameters;  calculate_gamma=true,
-                                    FixedN = true)
+            		"$j/$(length(JJ)) for L=$L)")
+            		
+           	# Different filling simulations; ComputeAllObservables=false by default
+            E[1], _, _, = RunDMRGAlgorithm([L, L-1, nmax, J, μ0], 
+                                    	   DMRGParameters;
+                                    	   ComputeGamma=true, 
+		                                   FixedN = true)
+            E[2], nVariance, Γ, = RunDMRGAlgorithm([L, L, nmax, J, μ0], 
+                                            	   DMRGParameters;
+				                            	   ComputeGamma=true, 
+						                           FixedN = true)
+            E[3], _, _, = RunDMRGAlgorithm([L, L+1, nmax, J, μ0], 
+                                    	   DMRGParameters;
+                                    	   ComputeGamma=true, 
+		                                   FixedN = true)
             ΔEplus = E[3] - E[2]
             ΔEminus = E[2] - E[1]
             write(DataFile,"$L; $J; $(E[2]); $ΔEplus; $ΔEminus; $nVariance; $Γ\n")
@@ -126,12 +154,13 @@ function CalculateObservables(LL::Array{Int64}, JJ::Array{Float64},
 end
 
 function main()
-    # Set "global" parameters
+
+    # TODO Import DMRG parameters from user input
     nmax = 3
-    nsweep = 5
-    maxlinkdim = [10,50,75,200,500]
-    cutoff = [1E-12]
-    DMRGParameters = [nsweep, maxlinkdim, cutoff]
+    nsweeps = 5
+    maxlinkdim = [10,50,75,200,500]		# TODO Change
+    cutoff = [1E-12]					# TODO Change
+    DMRGParameters = [nsweeps, maxlinkdim, cutoff]
 
     # ----------------------
     # --- Study Variance ---
@@ -141,16 +170,21 @@ function main()
     # JJ = collect(0.0:0.03:0.3)
     # μμ = collect(range(0.0,1,5))
     # i = ceil(Int64, L/2) # site on which to calculate variance
-    # CalculateVariance(JJ, μμ, i, L, N, nmax, DMRGParameters,
+    # CalculateVariance(i, L, N, nmax, JJ, μμ, DMRGParameters,
     #    "../simulations/data_variance.txt")
 
     # -----------------------------------------------------------
     # --- Boundary between SF and MI & Correlation function Γ ---
     # -----------------------------------------------------------
+    
+    # TODO Import model parameters from user input
     JJ = collect(range(start=0.0, stop=0.35, length=100))
     LL = [10, 20, 30]
-    FilePathOut = string(@__DIR__, "/../simulations/simulations_240204.txt")
+    
+    FilePathOut = PROJECT_ROOT * "/simulations/simulations_240204.txt")
     CalculateObservables(LL, JJ, nmax, DMRGParameters, FilePathOut)
 end
 
-main()
+if abspath(PROGRAM_FILE) == @__FILE__
+	main()
+end

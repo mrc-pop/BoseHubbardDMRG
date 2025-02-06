@@ -1,4 +1,4 @@
-#/usr/bin/julia
+#!/usr/bin/julia
 
 using ITensors, ITensorMPS
 using Plots; pgfplotsx()
@@ -6,6 +6,12 @@ using ColorSchemes
 using LaTeXStrings
 using Dates
 using DelimitedFiles
+
+# ---------------
+# --- Physics ---
+# ---------------
+
+# Full hamiltonian
 
 function GetHamiltonian(sites, J::Float64, U::Float64, μ::Float64; pbc=false)
     """
@@ -32,6 +38,9 @@ function GetHamiltonian(sites, J::Float64, U::Float64, μ::Float64; pbc=false)
     return MPO(os,sites)
 end
 
+# Local hamiltonian
+# TODO Evaluate if full hamiltonian can be obtained by calling GetLocalH
+
 function GetLocalH(sites, i, J::Float64, U::Float64, μ::Float64)
     """
     Construct the local Hamiltonian term MPO for site `i` in the 1D Bose-Hubbard
@@ -51,6 +60,8 @@ function GetLocalH(sites, i, J::Float64, U::Float64, μ::Float64)
     return MPO(os,sites)
 end
 
+# Total number operator
+
 function GetNumber(sites)
     """
     Calculate the total number operator `N` as a MPO for the given sites.
@@ -63,6 +74,8 @@ function GetNumber(sites)
     return MPO(os, sites)
 end
 
+# Two points correlator
+
 function GetTwoPointCorrelator(sites,i::Int64,j::Int64)
     """
     Construct the two-point correlator operator `a_i^+ a_j` as an MPO
@@ -72,6 +85,8 @@ function GetTwoPointCorrelator(sites,i::Int64,j::Int64)
     os += "Adag",i,"A",j
     return MPO(os,sites)
 end
+
+# Number variance operator per site
 
 function GetNumberVariance(psi, sites, i::Int64)
     """
@@ -96,11 +111,17 @@ function GetNumberVariance(psi, sites, i::Int64)
     return n2 - n1_squared
 end
 
+# ------------
+# --- DMRG ---
+# ------------
+
 function SetStartingState(sites, N, d)
+
     """
     Create an initial MPS with `N` particles and local Hilbert space dimension
     `d` on the given sites.
     """
+
     L = length(sites)
     NumFullSites = floor(Int64, N/(d-1))
     k = NumFullSites + 1
@@ -130,19 +151,33 @@ function SetStartingState(sites, N, d)
     return MPS(sites, states)
 end
 
-function RunDMRGAlgorithm(ModelParameters, DMRGParameters; 
-    verbose=false, U=1.0, calculate_gamma=false, FixedN=false, pbc=false)
+function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
+						  DMRGParameters::Vector{Any};
+						  ComputeAllObservables=false	# Save computation time is less observables are required
+						  ComputeGamma=false,			# Save computation time if correlator is not needed
+						  verbose=false,				# Do not print at line
+						  U=1.0,						# Simplify model
+						  FixedN=false,					# Let N vary
+						  pbc=false)					# No periodic boundary conditions
+    
     """
     Run DMRG algorithm with chosen parameters, and return results.
     Truncate the local Hilbert space with a maximum occupation of nmax.
     The on-site interaction U is by default fixed to 1.
     Input:
-        - ModelParameters: array of [L::Int64, N::Int64, nmax::Int64, 
-            J::Float64, μ::Float64]
-        - DMRGParameters: array of [nsweeps, maxdim, cutoff]
+        - ModelParameters: array of [L::Int64, N::Int64, nmax::Int64,
+        							 J::Float64, μ::Float64]
+        - DMRGParameters: array of [nsweeps::Int64, maxdim::Int64, 
+        							cutoff::Vector{Float64}]
+    Parametric input:
+        - ComputeAllObservables: boolean variable, if false only E, 
+          nVariance and Γ are computed (default: false)
+        - ComputeGamma: boolean variable, if false all positional correalators
+          are not extracted (default: false)
     Output:
         - Results of DMRG optimization and relevant observables
     """
+    
     L, N, nmax = Int64.(ModelParameters[1:3])
     J = ModelParameters[4]
     μ = ModelParameters[5]
@@ -157,10 +192,7 @@ function RunDMRGAlgorithm(ModelParameters, DMRGParameters;
 
     # Calculate hamiltonian and number operators
     d = nmax + 1
-    sites = siteinds("Boson",
-                    L,
-                    dim=d;
-                    conserve_number = FixedN)
+    sites = siteinds("Boson", L, dim=d; conserve_number=FixedN)
     H = GetHamiltonian(sites, J, U, μ; pbc)
     Ntot = GetNumber(sites)
     
@@ -173,47 +205,66 @@ function RunDMRGAlgorithm(ModelParameters, DMRGParameters;
     end
 
     # Run DMRG algorithm and print results
-    E, psi = dmrg(H,psi0;nsweeps,maxdim,cutoff,outputlevel=verbose)
+    E, psi = dmrg(H, psi0; nsweeps, maxdim, cutoff, outputlevel=verbose)
 
     # Sanity checks: calculate whether Ntot has been conserved, and 
     # the found ground state is actually an eigenstate of H.
     if verbose
-        VarE = inner(H,psi,H,psi) - E^2
+        VarE = inner(H, psi, H, psi) - E^2
         NtotAvg = inner(psi', Ntot, psi)
         println("\nFinal N=$(round(NtotAvg, digits=3)), ", 
-        "E=$(round(E,digits=4)), ",
-        "VarE=$(round(VarE,digits=4))\n")
+        		"E=$(round(E,digits=4)), ",
+        		"VarE=$(round(VarE,digits=4))\n")
     end
 
-    # Calculate relevant observables in the ground state.
-    aAvg = zeros(L) # < a_j > (possible order parameter for SF)
-    nMean = zeros(L)
-    nVariance = zeros(L) # variance on n_i, for all sites i
-    LocalE = zeros(L) # "local part" of contribution to the energy
+    # Calculate relevant observables in the ground state
+    
+    nVariance = zeros(L) 			# variance on n_i, for all sites i
+    if ComputeAllObservables		# Conditional: save time if not needed
+    	aAvg = zeros(L) 			# < a_i > (possible order parameter for SF)
+    	nMean = zeros(L)			# Mean number of particles per site
+    	LocalE = zeros(L)			# Local contribution to the energy
+    end
 
     for i in 1:L
-        aAvg[i] = expect(psi, "a"; sites=i)
-        nMean[i] = expect(psi, "n"; sites=i)
-        nVariance[i] = GetNumberVariance(psi, sites, i)
-        LocalE[i] = inner(psi', GetLocalH(sites, i, J, U, μ), psi)
+    	nVariance[i] = GetNumberVariance(psi, sites, i)
+    	if ComputeAllObservables	# Conditional: save time if not needed
+	        aAvg[i] = expect(psi, "a"; sites=i)
+    	    nMean[i] = expect(psi, "n"; sites=i)
+    	    LocalE[i] = inner(psi', GetLocalH(sites, i, J, U, μ), psi)
+    	end
     end
 
-    # 2 point correlator Γ(r), r even, r < L/2
-    iCenter = ceil(Int64, L/2)
-    Γ = zeros(floor(Int64, iCenter/2)) 
-    if calculate_gamma
+	# Calculate correlator
+
+    if ComputeGamma
+    
+    	# 2 point correlator Γ(r), r even, r < L/2
+    	iCenter = ceil(Int64, L/2)
+    	Γ = zeros(floor(Int64, iCenter/2)) 
+    
         for j in 1:floor(Int64,iCenter/2)
             Γop = GetTwoPointCorrelator(sites, iCenter-j, iCenter+j)
             Γ[j] = inner(psi', Γop, psi)
         end
+    else
+		Γ=false    	
     end
 
-    return E, aAvg, nMean, nVariance, LocalE, Γ, psi
+	if ComputeAllObservables
+	    return E, aAvg, nMean, nVariance, LocalE, Γ, psi
+	else
+		return E, nVariance, Γ
+	end
 end
 
 function main()
-    # Run DMRG for different algorithm parameters, to check
-    # how many sweeps are sufficient for convergence.
+
+	"""
+    Run DMRG for different algorithm parameters, to check how many sweeps are
+    sufficient for convergence.
+    """
+    
     L = 10
     N = 10
     nmax = 3
@@ -228,7 +279,10 @@ function main()
     # ------------------------------
     # --- Results for single run ---
     # ------------------------------
-    E, aAvg, nMean, nVariance, LocalE, Γ = RunDMRGAlgorithm([L, N, nmax, J, μ], DMRGParameters; verbose=true)
+    E, aAvg, nMean, nVariance, LocalE, Γ = RunDMRGAlgorithm([L, N, nmax, J, μ],
+    														DMRGParameters;
+    														ComputeAllObservables=true, 
+    														verbose=true)
 
     println("Energy of ground state: $(round.(E, digits=4))\n")
     println("\"Local\" part of energy: $(round.(LocalE, digits=4))\n")
@@ -238,5 +292,11 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__ # equivalent to if __name__ == "__main__"
+	
+	"""
+	If this file is directly compiled, run a single DMRG simulation by the
+    parameters defined in function main().
+    """
+    
     main()
 end
