@@ -99,9 +99,9 @@ function PlotPhaseBoundaries(FilePathIn::String;
     if !=(FilePathOut,"")
         savefig(FilePathOut)
         if gap
-            println("Gap for L=$(Int.(LL)) plotted to ", FilePathOut)
+            println("\nGap for L=$(Int.(LL)) plotted to ", FilePathOut)
         else
-            println("Phase boundaries for L=$(Int.(LL)) plotted to ", FilePathOut)
+            println("\nPhase boundaries for L=$(Int.(LL)) plotted to ", FilePathOut)
         end
     end
 end
@@ -221,6 +221,68 @@ function FitPhaseBoundaries(FilePathIn::String,
     end
 end
 
+function PlotCorrelationFunction(FilePathIn::String,
+                                 j::Int64;
+                                 FilePathOut="",
+                                 overwrite=true)
+
+    """ Plot the correlation function Γ(r) for the chosen J (the j-th)."""
+
+    # Read the input data
+    data = readdlm(FilePathIn, ';', '\n'; comments=true)
+
+    # Extract unique J, L values
+    JJ = unique(data[:, 2])
+    LL = unique(data[:, 1])
+
+    println("\nPlotting correlation function.")
+    println("Available values of J: $JJ")
+    
+    # Mastruzzo to extract array of Γ
+    function parse_array(str)
+        return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
+    end
+    Γall = [parse_array(row[7]) for row in eachrow(data)]
+
+    if overwrite
+        plot()
+    end
+
+    J = JJ[j] # choose the j-th J
+
+    println("Chosen value of J: $J")
+
+    for L in LL
+        # Filter data for the current J and L
+        filter = (data[:, 2] .== J) .& (data[:, 1] .== L)
+
+        # Extract the correlators {Γ(r,J,L)}_r for the selected J,L
+        Γeven = Γall[filter][1] # this is an array, Γ(r even)
+        r = range(start=2, step=2, length=length(Γeven)) # r even
+
+        # Check if Γeven has at least two elements
+        if length(Γeven) < 2
+            println("Warning: Not enough data points for L = $L. Skipping.")
+            continue
+        end
+
+        scatter!(r, Γeven,
+            xlabel=L"$r$",
+            ylabel=L"$\Gamma(r)$",
+            title=L"Correlation function ($J=%$J$)",
+            label=L"L=%$L",
+            markersize=2,
+            xscale=:log10,
+            yscale=:log10,  
+            legend=:topright)
+    end
+
+    if !=(FilePathOut,"")
+        savefig(FilePathOut)
+        println("Correlator vs r plotted to ", FilePathOut)
+    end
+end
+
 function FitCorrelationFunction(FilePathIn::String,
 								FilePathOut::String)
 								
@@ -332,7 +394,7 @@ function FitCorrelationFunction(FilePathIn::String,
                 legend=:topright)
                 K_infty_plot = round(K_J, digits=2)
             plot!(fit_x, fit_y, label=L"Best-fit ($K_\infty = %$K_infty_plot$)")
-            savefig(string(@__DIR__,"/../analysis/correlators_singleplot_FSS.pdf"))
+            savefig(string(@__DIR__,"/../analysis/correlations/correlators_singleplot_FSS.pdf"))
         end
     end
 
@@ -350,7 +412,7 @@ function FitCorrelationFunction(FilePathIn::String,
         markersize=2,
         label="Fitted data")
     plot!(JJ, 0.5*ones(length(JJ)), label=L"$K_\mathrm{th} = 1/2$")
-    savefig(string(@__DIR__,"/../analysis/correlators_K.pdf"))
+    savefig(string(@__DIR__,"/../analysis/correlations/correlators_K.pdf"))
 end
 
 
@@ -372,15 +434,15 @@ function main()
     # ----------------------------------
     # --- Boundary between SF and MI ---
     # ----------------------------------
-    FilePathIn = PROJECT_ROOT * "/simulations/simulations_240204.txt"
+    FilePathIn = PROJECT_ROOT * "/simulations/simulations_240406.txt"
 
     PhaseBoundariesDir = PROJECT_ROOT * "/analysis/phase_boundaries/"
     
-    FilePathPlot = PhaseBoundariesDir * "phaseboundaries_240204.pdf"
+    FilePathPlot = PhaseBoundariesDir * "phaseboundaries_240406.pdf"
     FilePathFit = PhaseBoundariesDir * "fitted_phase_boundaries.txt"
     
-    FilePathPlotOut = PhaseBoundariesDir * "phaseboundaries_240204_fit.pdf"
-    FilePathSinglePlotOut = PhaseBoundariesDir * "phaseboundaries_240204_fit_single.pdf"
+    FilePathPlotOut = PhaseBoundariesDir * "phaseboundaries_240406_fit.pdf"
+    FilePathSinglePlotOut = PhaseBoundariesDir * "phaseboundaries_240406_fit_single.pdf"
 
     PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut=FilePathPlot)
 
@@ -389,9 +451,11 @@ function main()
     # ------------------------------
     # --- Correlation function Γ ---
     # ------------------------------
-    # FilePathIn = string(@__DIR__, "/../simulations/simulations_server_240203.txt")
-    # FilePathFit = string(@__DIR__, "/../analysis/correlators_fitted_server.txt")
-    # FitCorrelationFunction(FilePathIn, FilePathFit)
+    FilePathFit = PROJECT_ROOT * "/analysis/correlations/fit_correlation.txt"
+    FileGammaPlot = PROJECT_ROOT * "/analysis/correlations/single_correlation.pdf"
+
+    j = 8 # CHANGE: which J to choose for the plot
+    PlotCorrelationFunction(FilePathIn, j; FilePathOut=FileGammaPlot)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
