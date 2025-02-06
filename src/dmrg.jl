@@ -153,7 +153,7 @@ end
 
 function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 						  DMRGParameters::Vector{Any};
-						  ComputeAllObservables=false	# Save computation time is less observables are required
+						  ComputeAllObservables=false,	# Save computation time is less observables are required
 						  ComputeGamma=false,			# Save computation time if correlator is not needed
 						  verbose=false,				# Do not print at line
 						  U=1.0,						# Simplify model

@@ -1,16 +1,20 @@
 #/usr/bin/julia
 
+PROJECT_ROOT = @__DIR__ # Absloute path up to .../BoseHubbardDMRG/src
+
 using LsqFit
 
-# Include the dmrg.jl file
-include("./dmrg.jl")
-include(string(@__DIR__, "/../src/graphic_setup.jl"))
+# Include functions and graphic file
+include(PROJECT_ROOT * "/src/dmrg.jl")
+include(PROJECT_ROOT * "/src/graphic_setup.jl")
 
 function PlotVariance(FilePath::String, L, nmax, i)
+
     """
     Plot the variance of the number of particles on site `i` from data saved
     in `FilePath`.
     """
+    
     VarianceData = readdlm(FilePath, ',', Float64, '\n'; comments=true)
 
     JJ = VarianceData[:,1]
@@ -34,14 +38,20 @@ function PlotVariance(FilePath::String, L, nmax, i)
 end
 
 function PlotPhaseBoundaries(FilePathIn::String; 
-    FilePathOut="", gap=false, overwrite=true, CustomLL=[], μ0=0.0)
+    						 FilePathOut="",
+    						 gap=false,
+    						 overwrite=true, 
+    						 CustomLL=[],
+    						 μ0=0.0)
+    
     """
     Plot the phase boundaries between the Mott Insulator (MI) and Superfluid 
-    (SF) phases, calculated from CalculateObservables.
+    (SF) phases, calculated from RectangularSweep.
     If gap=true, plot the charge gap instead of the phase boundaries.
     If overwrite=true, clears previous plots. 
     If CustomLL specified, plot only those sizes.
     """
+    
     BoundariesData = readdlm(FilePathIn, ';', '\n'; comments=true)
 
     if overwrite
@@ -96,9 +106,13 @@ function PlotPhaseBoundaries(FilePathIn::String;
     end
 end
 
-function FitPhaseBoundaries(FilePathIn::String, FilePathOut::String;
-    FilePathPlotOut="", FilePathSinglePlotOut="")
-    #makeplot=false, makesinglefitplot=false)
+function FitPhaseBoundaries(FilePathIn::String,
+							FilePathOut::String;
+							FilePathPlotOut="",
+							FilePathSinglePlotOut="")
+    						# makeplot=false, 
+    						# makesinglefitplot=false)
+    						
     """
     Fit ΔEplus(L) and ΔEminus(L) as functions of 1/L for each J, and extract 
     their values at L -> ∞. Save the results to a file. 
@@ -207,12 +221,15 @@ function FitPhaseBoundaries(FilePathIn::String, FilePathOut::String;
     end
 end
 
-function FitCorrelationFunction(FilePathIn::String, FilePathOut::String)
+function FitCorrelationFunction(FilePathIn::String,
+								FilePathOut::String)
+								
     """
     Read data from file. Then fit a power-law extracting the exponent K(J,L). 
     Then fit it against L to extract the thermodynamic limit K_∞(J).
     Finally, plot K_∞ against J.
     """
+    
     # Read the input data
     data = readdlm(FilePathIn, ';', '\n'; comments=true)
 
@@ -230,6 +247,7 @@ function FitCorrelationFunction(FilePathIn::String, FilePathOut::String)
     function parse_array(str)
         return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
     end
+    
     Γall = [parse_array(row[7]) for row in eachrow(data)]
     display(Γall) # (TODO check, but it seems to work)
 
@@ -354,17 +372,19 @@ function main()
     # ----------------------------------
     # --- Boundary between SF and MI ---
     # ----------------------------------
-    FilePathIn = string(@__DIR__, "/../simulations/simulations_240204.txt")
+    FilePathIn = PROJECT_ROOT * "/simulations/simulations_240204.txt"
 
-    PhaseBoundariesDir = string(@__DIR__, "/../analysis/phase_boundaries/")
-    FilePathPlot = PhaseBoundariesDir*"phaseboundaries_240204.pdf"
-    FilePathFit = PhaseBoundariesDir*"fitted_phase_boundaries.txt"
+    PhaseBoundariesDir = PROJECT_ROOT * "/analysis/phase_boundaries/"
+    
+    FilePathPlot = PhaseBoundariesDir * "phaseboundaries_240204.pdf"
+    FilePathFit = PhaseBoundariesDir * "fitted_phase_boundaries.txt"
+    
+    FilePathPlotOut = PhaseBoundariesDir * "phaseboundaries_240204_fit.pdf"
+    FilePathSinglePlotOut = PhaseBoundariesDir * "phaseboundaries_240204_fit_single.pdf"
 
-    PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut = FilePathPlot)
+    PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut=FilePathPlot)
 
-    FitPhaseBoundaries(FilePathIn, FilePathFit; 
-        FilePathPlotOut=PhaseBoundariesDir*"phaseboundaries_240204_fit.pdf",
-        FilePathSinglePlotOut=PhaseBoundariesDir*"phaseboundaries_240204_fit_single.pdf")
+    FitPhaseBoundaries(FilePathIn, FilePathFit; FilePathPlotOut, FilePathSinglePlotOut)
     
     # ------------------------------
     # --- Correlation function Γ ---
@@ -374,4 +394,6 @@ function main()
     # FitCorrelationFunction(FilePathIn, FilePathFit)
 end
 
-main()
+if abspath(PROGRAM_FILE) == @__FILE__
+	main()
+end

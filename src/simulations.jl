@@ -27,7 +27,7 @@ function HorizontalSweep(LL::Array{Int64},
     Use μ0=0 by default (SF phase).
     """
     
-    # TODO Generalize this function for N!=L
+    # TODO Generalize this function for N != L
 
     DataFile = open(FilePathOut,"w")
     write(DataFile,"# Hubbard model DMRG. nmax=$nmax, μ0=$μ0.\n")
@@ -36,11 +36,12 @@ function HorizontalSweep(LL::Array{Int64},
     E = zeros(Float64, 3)
 
     for L in LL
-        println("\n Starting calculation of observables for L=$L...\n")
+        println("Starting calculation of observables for L=$L...")
+
         for (j, J) in enumerate(JJ)
             println("Running DMRG for J=$(round(J,digits=3)), μ=$μ0 (simulation ",
             		"$j/$(length(JJ)) for L=$L)")
-            		
+            
            	# Different filling simulations; ComputeAllObservables=false by default
             E[1], _, _, = RunDMRGAlgorithm([L, L-1, nmax, J, μ0], 
                                     	   DMRGParameters;
@@ -86,22 +87,36 @@ function RectangularSweep(i::Int64,
     write(DataFile,"# J, μ, E, n_variance [calculated $(now()) @site  i=$i]\n")
 
 	# TODO Generate file from fitting data of horizontal sweeps to separate MI from SF
-	# TODO Read data from file
+	Sizes, Couplings, Energies, UpBoundaries, DownBoundaries, _, _ = readdlm(FilePathIn, ';', Float64, '\n'; comments=true)
+	IndicesList = findall(==(L), Sizes)
 
     for J in JJ
+    	
+    	# Possible improvement: we know how many simulations have been performed for each L
+    	Index = IndicesList[findall(==(J), Couplings[IndicesList])]
+    	μUp = UpBoundaries[Index]
+    	μDown = DownBoundaries[Index]
+    	
         for μ in μμ
+        
             ModelParameters = [L, N, nmax, J, μ]
-
-			if J is MI # TODO finish
+			inMottLobe = false
+			
+			if (μ>=μDown && μ<=μUp)
+				inMottLobe=true
+			end
+			
+			if inMottLobe
 	            E, nVariance, _ = RunDMRGAlgorithm(ModelParameters,
 	                                               DMRGParametersMI;
 	                                               FixedN = false)
 	            write(DataFile,"$J, $μ, $E, $(nVariance[i]) # MI\n")
-	        elseif J is SF # TODO finish
+	        else
 	        	E, nVariance, _ = RunDMRGAlgorithm(ModelParameters,
 	                                               DMRGParametersSF;
   		                                           FixedN = false)
 	            write(DataFile,"$J, $μ, $E, $(nVariance[i]) # SF\n")
+	        end
         end
     end
 
@@ -135,7 +150,6 @@ function main()
 	else
 		
 		UserMode = ARGS[1]
-		    
 		if UserMode=="--horizontal"
 
 			# Horizontal sweep
@@ -143,11 +157,12 @@ function main()
 	    	JJ = collect(range(start=0.0, stop=0.35, length=100))
 	    	LL = [10, 20, 30]
 	    
-	    	FilePathOut = PROJECT_ROOT * "/simulations/L=$L/horizontal_sweep.txt")
+	    	FilePathOut = PROJECT_ROOT * "/simulations/horizontal_sweep.txt"
 	    	# TODO Evaluate: use superfluid DMRG paramters?
-	    	HorizontalSweep(LL, JJ, nmax, DMRGParametersSF, FilePathOut)
+	    	HorizontalSweep(LL, nmax, JJ, DMRGParametersSF, FilePathOut)
+			
 
-		if UserMode=="--rectangular"
+		elseif UserMode=="--rectangular"
 
 			# Rectangular sweep
 		    N = 10 								# TODO Change
@@ -155,15 +170,18 @@ function main()
 		    JJ = [J for J in 0.0:0.03:0.3]		# TODO Change, exclude J=0
 		    μμ = [μ for μ in 0.0:0.1:1.0]		# TODO Change
 
+			FilePathIn =  PROJECT_ROOT * "/simulations/horizontal_sweep.txt"
 		    # TODO Cycle over sites, extend to different fillings
-		    i = ceil(Int64, L/2) # site on which to calculate variance
-			FilePathOut = PROJECT_ROOT * "/simulations/L=$L/rectangular_sweep_site=$i"
-		    RectangularSweep(i, L, N, nmax, JJ, μμ, DMRGParametersMI, DMRGParametersSF, FilePathOut)
+		    i = ceil(Int64, L/2) 				# Site to calculate variance on
+		    mkpath(PROJECT_ROOT * "/simulations/L=$L")
+			FilePathOut = PROJECT_ROOT * "/simulations/L=$L/rectangular_sweep_site=$i.txt"
+		    RectangularSweep(i, L, N, nmax, JJ, μμ, DMRGParametersMI, DMRGParametersSF, FilePathIn, FilePathOut)
 		
 		else
 			error(ModeErrorMsg)
 			exit()
 		end
+		
 	end
 end
 
