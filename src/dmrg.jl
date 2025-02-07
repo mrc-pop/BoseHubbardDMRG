@@ -76,14 +76,50 @@ end
 
 # Two points correlator
 
-function GetTwoPointCorrelator(sites,i::Int64,j::Int64)
+function GetTwoPointCorrelator(sites, i::Int64, j::Int64)
+    
     """
     Construct the two-point correlator operator `a_i^+ a_j` as an MPO
     for sites `i` and `j`.
     """
+    
     os = OpSum()
     os += "Adag",i,"A",j
     return MPO(os,sites)
+end
+
+# Density-density correlator
+
+function GetNumberCorrelator(psi, sites, i::Int64, j::Int64)
+    
+    """
+    Extract the full density-density correlator beween sites i, j. The function
+    does not return a MPO, but a scalar number.
+    """
+    
+    if (i < 0) | (i > length(sites))
+        error("First site index out of bounds! Use a proper index.")
+        return
+    elseif (j < 0) | (j > length(sites))
+        error("Second site index out of bounds! Use a proper index.")
+        return
+    end
+    
+    os = 0
+    os = OpSum()
+    os += "N",i
+    hatNi = MPO(os, sites)
+    
+    os = 0
+    os = OpSum()
+    os += "N",j
+    hatNj = MPO(os, sites)
+    
+    NiNj = inner(hatNi, psi, hatNj, psi)
+    Ni = inner(psi', hatNi, psi)
+    Nj = inner(psi', hatNj, psi)
+    
+    return NiNj - (Ni*Nj)
 end
 
 # Number variance operator per site
@@ -93,22 +129,19 @@ function GetNumberVariance(psi, sites, i::Int64)
     Calculate the variance of the number of particles on site `i` for the state
     `psi`.
     """
-    if i < 0 | i > length(sites)
+    if (i < 0) | (i > length(sites))
         error("Site index out of bounds! Use a proper index.")
         return
     end
 
-    n = OpSum()
-    n += "N",i
-    n = MPO(n, sites)
+    os = OpSum()
+    os += "N",i
+    hatNi = MPO(os, sites)
 
+    Ni2 = inner(hatNi, psi, hatNi, psi)
+    Ni1 = inner(psi', hatNi, psi)
 
-    n2 = inner(n, psi, n, psi)
-    n1_squared = inner(psi', n, psi)^2
-
-    # println("For site $i: <n^2> = $n2, <n>^2 = $n1_squared")
-
-    return n2 - n1_squared
+    return Ni2 - (Ni1^2)
 end
 
 # ------------
@@ -154,7 +187,8 @@ end
 function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 						  DMRGParameters::Vector{Any};
 						  ComputeAllObservables=false,	# Save computation time is less observables are required
-						  ComputeGamma=false,			# Save computation time if correlator is not needed
+						  ComputeGamma=false,			# Save computation time if b correlator is not needed
+						  ComputeC=false,				# Save computation time if density correlator is not needed
 						  verbose=false,				# Do not print at line
 						  U=1.0,						# Simplify model
 						  FixedN=false,					# Let N vary
@@ -174,6 +208,8 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
           nVariance and Γ are computed (default: false)
         - ComputeGamma: boolean variable, if false all positional correalators
           are not extracted (default: false)
+        - ComputeC: boolean variable, if false all positional correalators are
+          not extracted (default: false)
     Output:
         - Results of DMRG optimization and relevant observables
     """
@@ -219,7 +255,7 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 
     # Calculate relevant observables in the ground state
     
-    nVariance = zeros(L) 			# variance on n_i, for all sites i
+    nVariance = zeros(L) 			# Variance on n_i, for all sites i
     if ComputeAllObservables		# Conditional: save time if not needed
     	aAvg = zeros(L) 			# < a_i > (possible order parameter for SF)
     	nMean = zeros(L)			# Mean number of particles per site
@@ -235,12 +271,11 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     	end
     end
 
-	# Calculate correlator
+	# Calculate two-points correlator
 
-    if ComputeGamma
-    
+	iCenter = ceil(Int64, L/2)
+    if ComputeGamma || ComputeAllObservables
     	# 2 point correlator Γ(r), r even, r < L/2
-    	iCenter = ceil(Int64, L/2)
     	Γ = zeros(floor(Int64, iCenter/2)) 
     
         for j in 1:floor(Int64,iCenter/2)
@@ -250,11 +285,29 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     else
 		Γ=false    	
     end
+    
+    # Calculate density-density correlator
+    
+    if ComputeC || ComputeAllObservables
+    	C = zeros(L-1)
+    	
+    	for j in 1:(iCenter-1)
+    		Cop = GetNumberCorrelator(sites, iCenter-j+1, iCenter+j)
+    		C[2*j-1] = inner(psi', Cop, psi)
+    		Cop = GetNumberCorrelator(sites, iCenter-j, iCenter+j)
+    		C[2*j] = inner(psi', Cop, psi)
+    	end
+    	C[L-1] = GetNumberCorrelator(sites, 1, L) # Last left to compute
+    else
+		C=false    	
+    end
 
-	if ComputeAllObservables
-	    return E, aAvg, nMean, nVariance, LocalE, Γ, psi
+	if ComputeAllObservables	# Very slow
+	    return E, aAvg, nMean, nVariance, LocalE, Γ, C, psi
+	elseif ComputeGamma || ComputeC
+		return E, nVariance, Γ, C
 	else
-		return E, nVariance, Γ
+		return E, nVariance
 	end
 end
 
@@ -279,10 +332,11 @@ function main()
     # ------------------------------
     # --- Results for single run ---
     # ------------------------------
-    E, aAvg, nMean, nVariance, LocalE, Γ = RunDMRGAlgorithm([L, N, nmax, J, μ],
-    														DMRGParameters;
-    														ComputeAllObservables=true, 
-    														verbose=true)
+    Observables = RunDMRGAlgorithm([L, N, nmax, J, μ],
+    							    DMRGParameters;
+    								ComputeAllObservables=true, 
+    								verbose=true) 
+    E, aAvg, nMean, nVariance, LocalE, Γ, C, psi = Observables
 
     println("Energy of ground state: $(round.(E, digits=4))\n")
     println("\"Local\" part of energy: $(round.(LocalE, digits=4))\n")

@@ -9,11 +9,13 @@ PROJECT_ROOT *= "/.."	# Absloute path up to .../BoseHubbardDMRG/
 
 # TODO Add """[overall introduction]"""
 
-# -----------------
-# --- Functions ---
-# -----------------
+# ------------------------------------------------------------------------------
+# ------------------------------ Sweep functions -------------------------------
+# ------------------------------------------------------------------------------
 
-function HorizontalSweep(LL::Array{Int64},
+# ------------------------------ Horizontal sweep ------------------------------
+
+function HorizontalSweep(L::Int64,
 						 nmax::Int64,
 						 JJ::Array{Float64},
     					 DMRGParameters::Vector{Any},    					 
@@ -26,45 +28,46 @@ function HorizontalSweep(LL::Array{Int64},
         - Correlation function.
     Use μ0=0 by default (SF phase).
     """
-    
-    # TODO Generalize this function for N != L
-
-    DataFile = open(FilePathOut,"w")
-    write(DataFile,"# Hubbard model DMRG. nmax=$nmax, μ0=$μ0.\n")
-    write(DataFile,"# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ [calculated $(now())]\n")
-
+	
+	DataFile = open(FilePathOut,"a")
     E = zeros(Float64, 3)
-
-    for L in LL
-        println("Starting calculation of observables for L=$L...")
 
         for (j, J) in enumerate(JJ)
             println("Running DMRG for J=$(round(J,digits=3)), μ=$μ0 (simulation ",
             		"$j/$(length(JJ)) for L=$L)")
             
-           	# Different filling simulations; ComputeAllObservables=false by default
-            E[1], _, _, = RunDMRGAlgorithm([L, L-1, nmax, J, μ0], 
-                                    	   DMRGParameters;
-                                    	   FixedN = true)
-            E[2], nVariance, Γ, = RunDMRGAlgorithm([L, L, nmax, J, μ0], 
-                                            	   DMRGParameters;
-				                            	   ComputeGamma=true, 
-						                           FixedN = true)
-            E[3], _, _, = RunDMRGAlgorithm([L, L+1, nmax, J, μ0], 
-                                    	   DMRGParameters; 
-		                                   FixedN = true)
+           	"""
+           	Simulation at different filling fraction. By default, only energies
+           	and the number variance are extracted, and only for unitary filling
+           	nVariance is saved; the intermediate simulation also extracts Gamma,
+           	(later used) while C is never extracted. Default boolean values for
+           	all of these are false.            
+            """
+            
+            E[1], _, = RunDMRGAlgorithm([L, L-1, nmax, J, μ0], 
+                                    	DMRGParameters;
+                                    	FixedN = true)
+            E[2], nVariance, Γ, _ = RunDMRGAlgorithm([L, L, nmax, J, μ0], 
+                                            	   	 DMRGParameters;
+				                            	   	 ComputeGamma=true, 
+						                           	 FixedN = true)
+            E[3], _, = RunDMRGAlgorithm([L, L+1, nmax, J, μ0], 
+                                    	DMRGParameters; 
+		                                FixedN = true)
             ΔEplus = E[3] - E[2]
             ΔEminus = E[2] - E[1]
 
-            μplus = ΔEplus + μ0
-            μminus = -ΔEminus + μ0
+            μUp = ΔEplus + μ0
+            μDown = -ΔEminus + μ0
 
-            write(DataFile,"$L; $J; $(E[2]); $μplus; $μminus; $nVariance; $Γ\n")
+            write(DataFile,"$L; $J; $(E[2]); $μUp; $μDown; $nVariance; $Γ\n")
         end
     end
     close(DataFile)
-    println("Data saved on file!")
+    println("Data for L=$L saved on file!")
 end
+
+# ----------------------------- Rectangular sweep ------------------------------
 
 function RectangularSweep(i::Int64,
     					  L::Int64,
@@ -81,7 +84,7 @@ function RectangularSweep(i::Int64,
     hopping J and chemical potential μ values. Results are saved to a file.
     """
     
-    DataFile = open(FilePathOut,"w")
+    DataFile = open(FilePathOut, "w")
     write(DataFile,"# Hubbard model DMRG. L=$L, N=$N, nmax=$nmax\n")
     write(DataFile,"# NOTE: Different DMRG settings have been used for MI and SF. Check the code.\n")
     write(DataFile,"# J, μ, E, n_variance [calculated $(now()) @site  i=$i]\n")
@@ -107,22 +110,82 @@ function RectangularSweep(i::Int64,
 			end
 			
 			if inMottLobe
-	            E, nVariance, _ = RunDMRGAlgorithm(ModelParameters,
-	                                               DMRGParametersMI;
-	                                               FixedN = false)
+	            E, nVariance = RunDMRGAlgorithm(ModelParameters,
+	                                            DMRGParametersMI;
+	                                            FixedN = false)
 	            write(DataFile,"$J, $μ, $E, $(nVariance[i]) # MI\n")
 	        else
-	        	E, nVariance, _ = RunDMRGAlgorithm(ModelParameters,
-	                                               DMRGParametersSF;
-  		                                           FixedN = false)
+	        	E, nVariance = RunDMRGAlgorithm(ModelParameters,
+	                                            DMRGParametersSF;
+  		                                        FixedN = false)
 	            write(DataFile,"$J, $μ, $E, $(nVariance[i]) # SF\n")
 	        end
         end
     end
 
     close(DataFile)
-    println("Data saved on file!")
 end
+
+# -------------------------------- Path sweep ----------------------------------
+
+function PathSweep(Path::NamedTuple(Name::String, Values::Vector{Tuple{Int64, Int64}}),
+				   L::Int64,
+				   N::Int64,
+				   nmax::Int64,
+				   DMRGParametersMI::Vector{Any},
+				   DMRGParametersSF::Vector{Any},
+				   FilePathIn::String,				# To evaluate if a given point is MI or SF
+				   FilePathOut::String)
+				   
+	Sizes, Couplings, Energies, UpBoundaries, DownBoundaries, _, _ = readdlm(FilePathIn, ';', Float64, '\n'; comments=true)
+	IndicesList = findall(==(L), Sizes)
+				   
+	for Point in Path.Values
+		J, μ = Point
+				                      
+		# Possible improvement: we know how many simulations have been performed for each L
+    	Index = IndicesList[findall(==(J), Couplings[IndicesList])]
+    	μUp = UpBoundaries[Index]
+    	μDown = DownBoundaries[Index]
+        
+        ModelParameters = [L, N, nmax, J, μ]
+		inMottLobe = false
+		
+		if (μ>=μDown && μ<=μUp)
+			inMottLobe=true
+		end
+		
+		if inMottLobe
+            _, _, _, C = RunDMRGAlgorithm(ModelParameters,
+                                          DMRGParametersMI;
+                                          ComputeC = true,
+                                          FixedN = false)
+        else
+        	_, _, _, C = RunDMRGAlgorithm(ModelParameters,
+                                          DMRGParametersSF;
+	                                      ComputeC = true,
+	                                      FixedN = false)
+        end                
+        
+        # Perform DFT
+        D = 0
+        q = 2*pi/L
+        for r in 1:length(C)
+        	D += (-1)^(2*r/L) * C[r] # Numerically smarter than using the imaginary unit
+        end
+        K = 1/(L*D)
+        
+        DataFile = open(FilePathOut, "a")
+        write(DataFile, "$L, $J, $μ, $D, $K")
+		
+	end
+	close(DataFile)
+    println("Data for L=$L saved on file!")
+end
+
+# ------------------------------------------------------------------------------
+# ------------------------------------ Main ------------------------------------
+# ------------------------------------------------------------------------------
 
 function main()
 
@@ -156,27 +219,80 @@ function main()
 	    	# TODO Import model parameters from user input
 	    	JJ = collect(range(start=0.0, stop=0.35, length=100))
 	    	LL = [10, 20, 30]
-	    
-	    	FilePathOut = PROJECT_ROOT * "/simulations/horizontal_sweep.txt"
-	    	# TODO Evaluate: use superfluid DMRG paramters?
-	    	HorizontalSweep(LL, nmax, JJ, DMRGParametersSF, FilePathOut)
+	    	
+	    	DirPathOut = PROJECT_ROOT * "/simulations/horizontal_sweep"
+    		mkpath(DirPathOut)
+			FilePathOut = DirPathOut * "/L=$LL.txt"
+	    	
+	    	DataFile = open(FilePathOut,"w")
+			write(DataFile,"# Hubbard model DMRG. This file contains many sizes. nmax=$nmax, μ0=$μ0.\n")
+			write(DataFile,"# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ [calculated $(now())]\n")
+			close(DataFile)
+	    	
+	    	for L in LL
+        		println("Starting calculation of observables for L=$L...")
+				
+				# TODO Evaluate: use superfluid DMRG paramters?
+				HorizontalSweep(L, nmax, JJ, DMRGParametersSF, FilePathOut)
+			end
 			
+			println("Done!")
 
 		elseif UserMode=="--rectangular"
 
 			# Rectangular sweep
-		    N = 10 								# TODO Change
-		    L = 10 								# TODO Change
+		    NN = [10, 20, 30]								# TODO Change
+		    LL = [10, 20, 30] 					# TODO Change
 		    JJ = [J for J in 0.0:0.03:0.3]		# TODO Change, exclude J=0
 		    μμ = [μ for μ in 0.0:0.1:1.0]		# TODO Change
 
-			FilePathIn =  PROJECT_ROOT * "/simulations/horizontal_sweep.txt"
-		    # TODO Cycle over sites, extend to different fillings
-		    i = ceil(Int64, L/2) 				# Site to calculate variance on
-		    mkpath(PROJECT_ROOT * "/simulations/L=$L")
-			FilePathOut = PROJECT_ROOT * "/simulations/L=$L/rectangular_sweep_site=$i.txt"
-		    RectangularSweep(i, L, N, nmax, JJ, μμ, DMRGParametersMI, DMRGParametersSF, FilePathIn, FilePathOut)
-		
+			FilePathIn =  PROJECT_ROOT * "/simulations/horizontal_sweep/L=$LL.txt"
+
+			for i in 1:length(LL)
+			
+				L = LL[i]
+				N = NN[i]
+			
+				# TODO As for now, we are using for each L the local boundary.
+				# TODO We may as well import the fitted function and locally
+				# TODO calculate the thermodynamic boundary value.
+				
+				i = ceil(Int64, L/2) 				# Site to calculate variance on
+				
+				DirPathOut = PROJECT_ROOT * "/simulations/rectangular_sweep"
+	    		mkpath(DirPathOut)
+				FilePathOut = DirPathOut * "/L=$L_site=$i.txt"
+				
+				RectangularSweep(i, L, N, nmax, JJ, μμ, DMRGParametersMI, DMRGParametersSF, FilePathIn, FilePathOut)
+			end
+			
+			println("Done!")
+			
+		elseif UserMode=="--path"
+
+			# Arbitrary path sweep
+		    N = 10 								# TODO Change
+		    LL = [10, 20, 30] 					# TODO Change
+		    Path = GeneratePath()				# TODO From scratch
+
+			write(DataFile,"# Hubbard model DMRG along path $Path.Name. nmax=$nmax.\n")
+			write(DataFile,"# L, J, μ, D, K [calculated $(now())]\n")
+
+			for L in LL
+				FilePathIn =  PROJECT_ROOT * "/simulations/horizontal_sweep.txt"
+				
+				# TODO Cycle over sites, extend to different fillings
+				i = ceil(Int64, L/2) 				# Site to calculate variance on
+				
+				DirPathOut = PROJECT_ROOT * "/simulations/path=$Path.Name_sweep"
+	    		mkpath(DirPathOut)
+				FilePathOut = DirPathOut * "/L=$LL.txt"
+				
+				PathSweep(Path, L, N, nmax, DMRGParametersMI, DMRGParametersSF, FilePathIn, FilePathOut)
+			end
+			
+			println("Done!")
+			
 		else
 			error(ModeErrorMsg)
 			exit()
