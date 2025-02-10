@@ -273,7 +273,7 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 
 	# Calculate two-points correlator
 
-	iCenterLeft = ceil(Int64, L/2)
+	iCenter = ceil(Int64, L/2)
     if ComputeGamma || ComputeAllObservables
     	# 2 point correlator Γ(r), r even, r < L/2
     	
@@ -291,13 +291,13 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
         	Counter = 0
         	while j<=Stop
 		        Γop = GetTwoPointCorrelator(sites, i, j) # Note: averaging included
-		        Γ[r/2] += inner(psi', Γop, psi)
+		        Γ[Int64(r/2)] += inner(psi', Γop, psi)
 		        
 		        i += 1
 		        j += 1
 		        Counter += 1
 		    end
-		    Γ[r/2] /= Counter
+		    Γ[Int64(r/2)] /= Counter
         end
     else
 		Γ=false    	
