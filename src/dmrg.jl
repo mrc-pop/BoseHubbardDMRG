@@ -276,11 +276,29 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 	iCenter = ceil(Int64, L/2)
     if ComputeGamma || ComputeAllObservables
     	# 2 point correlator Γ(r), r even, r < L/2
-    	Γ = zeros(floor(Int64, iCenter/2)) 
+    	
+    	Trash = floor(Int64, (L-1)/4)
+    	Start = Trash+1
+    	Stop = L-Trash
+    	
+    	Segment = L-2*Trash
+    	Spacings = collect(Int64, 2:2:Segment-1)
+    	
+    	Γ = zeros(Float64, length(Spacings))
     
-        for j in 1:floor(Int64,iCenter/2)
-            Γop = GetTwoPointCorrelator(sites, iCenter-j, iCenter+j)
-            Γ[j] = inner(psi', Γop, psi)
+        for r in Spacings
+        	i = Start
+        	j = Start+r-1
+        	Counter = 0
+        	while j<=Stop
+		        Γop = GetTwoPointCorrelator(sites, i, j) # Note: averaging included
+		        Γ[r/2] += inner(psi', Γop, psi)
+		        
+		        i += 1
+		        j += 1
+		        Counter += 1
+		    end
+		    Γ[r/2] /= Counter
         end
     else
 		Γ=false    	

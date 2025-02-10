@@ -1,5 +1,8 @@
 #!/usr/bin/julia
 
+using Base.Threads
+using DelimitedFiles  # For writedlm
+
 PROJECT_ROOT = @__DIR__ # Absloute path up to .../BoseHubbardDMRG/src
 
 # Include the dmrg.jl file
@@ -14,9 +17,6 @@ PROJECT_ROOT *= "/.."	# Absloute path up to .../BoseHubbardDMRG/
 # ------------------------------------------------------------------------------
 
 # ------------------------------ Horizontal sweep ------------------------------
-
-using Base.Threads
-using DelimitedFiles  # For writedlm
 
 function HorizontalSweep(L::Int64,
                          nmax::Int64,
