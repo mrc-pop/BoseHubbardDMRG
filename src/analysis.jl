@@ -5,8 +5,8 @@ PROJECT_ROOT = @__DIR__ # Absloute path up to .../BoseHubbardDMRG/src
 using LsqFit
 
 # Include functions and graphic file
-include(PROJECT_ROOT * "/src/dmrg.jl")
-include(PROJECT_ROOT * "/src/graphic_setup.jl")
+include(PROJECT_ROOT * "/dmrg.jl")
+include(PROJECT_ROOT * "/graphic_setup.jl")
 
 function PlotVariance(FilePath::String, L, nmax, i)
 
@@ -83,7 +83,7 @@ function PlotPhaseBoundaries(FilePathIn::String;
                 label=L"$L=%$L$",
                 color=MyColors[l % length(MyColors)])
         else
-            plot!(JJ, μ0 .+ ΔEminus, 
+            plot!(JJ, μ0 .- ΔEminus, 
                 xlabel=L"$J$", ylabel=L"$\mu$",
                 label=L"$L=%$L$",
                 title=L"Extrapolation of $\mu_c^\pm(J)$ ($\mu_0=%$μ0$)",
@@ -141,11 +141,11 @@ function FitPhaseBoundaries(FilePathIn::String,
 
     # Perform the fit for each J
     for J in JJ
-        # Filter data for the current J
-        filter = (data[:, 2] .== J)
-        L = data[filter, 1]
-        ΔEplus = data[filter, 4]
-        ΔEminus = data[filter, 5]
+        # Filter data for the current J # and only include rows where L > 20
+        filtered_data = (data[:, 2] .== J) #.& (data[:,1] .> 20.0)
+        L = data[filtered_data, 1]
+        ΔEplus = data[filtered_data, 4]
+        ΔEminus = data[filtered_data, 5]
 
         inv_L = 1.0 ./ L
 
@@ -173,22 +173,23 @@ function FitPhaseBoundaries(FilePathIn::String,
         MyColors = ColorSchemes.tab10
 
         # Plot the fit results for one specific J if makesinglefitplot=true
-        if FilePathSinglePlotOut != "" && J == maximum(JJ)
+        if FilePathSinglePlotOut != "" && J == JJ[end-20]
             # Define the best-fit lines
-            fit_x = range(minimum(inv_L), maximum(inv_L), length=100)
+            fit_x = range(0.0, maximum(inv_L)*1.1, length=100)
             fit_y_plus = fit_func(fit_x, fit_plus.param)
             fit_y_minus = fit_func(fit_x, fit_minus.param)
 
             # Plot the data and best-fit lines
             scatter(inv_L, ΔEplus, label=L"$\Delta E^+$ data", xlabel=L"1/L", 
                 ylabel=L"$\Delta E$", title="Fit results for J = $(J)",
-                legend=:topleft, markersize=2, color=MyColors[1])
+                legend=:topleft, markersize=2, color=MyColors[1],
+                xlimits=(0.0,maximum(inv_L)*1.1))
             plot!(fit_x, fit_y_plus, label=L"$\Delta E^+$ fit", color=MyColors[1],
                 alpha=0.7)
-            scatter!(inv_L, ΔEminus, label=L"$\Delta E^-$ data", markersize=2,
-                color=MyColors[2])
-            plot!(fit_x, fit_y_minus, label=L"$\Delta E^-$ fit", color=MyColors[2],
-                alpha=0.7)
+            #scatter!(inv_L, -ΔEminus, label=L"$\Delta E^-$ data", markersize=2,
+            #    color=MyColors[2])
+            #plot!(fit_x, -fit_y_minus, label=L"$\Delta E^-$ fit", color=MyColors[2],
+            #    alpha=0.7)
 
             savefig(FilePathSinglePlotOut)
         end
@@ -211,13 +212,13 @@ function FitPhaseBoundaries(FilePathIn::String,
         # PlotPhaseBoundaries(FilePathIn; gap=false, overwrite=true)
         plot()
         plot!(JJ,
-              [ΔEplus_fit ΔEminus_fit],
+              [ΔEplus_fit, -ΔEminus_fit],
               label=[L"\mu_c^+ \, (L \rightarrow \infty)" L"\mu_c^- \, (L \rightarrow \infty)"], 
               xlabel=L"J", ylabel=L"$\mu$", 
               title="Fitted phase boundaries",
               alpha=1.0)
         savefig(FilePathPlotOut)
-        println("Phase boundaries fit plotted to ", FilePathOut)
+        println("Phase boundaries fit plotted to ", FilePathPlotOut)
     end
 end
 
@@ -236,7 +237,7 @@ function PlotCorrelationFunction(FilePathIn::String,
     LL = unique(data[:, 1])
 
     println("\nPlotting correlation function.")
-    println("Available values of J: $JJ")
+    println("From input file, there are $(length(JJ)) possible values of J.")
     
     # Mastruzzo to extract array of Γ
     function parse_array(str)
@@ -274,6 +275,8 @@ function PlotCorrelationFunction(FilePathIn::String,
             markersize=2,
             xscale=:log10,
             yscale=:log10,  
+            xticks=[1,10,100],
+            xlimits=(1,100),
             legend=:topright)
     end
 
@@ -284,7 +287,10 @@ function PlotCorrelationFunction(FilePathIn::String,
 end
 
 function FitCorrelationFunction(FilePathIn::String,
-								FilePathOut::String)
+								FilePathOut::String;
+                                SingleFitPlotPathOut="",
+                                PlotPathOut="",
+                                FSSPlotPathOut="")
 								
     """
     Read data from file. Then fit a power-law extracting the exponent K(J,L). 
@@ -299,11 +305,19 @@ function FitCorrelationFunction(FilePathIn::String,
     JJ = unique(data[:, 2])
     LL = unique(data[:, 1])
 
-    println("JJ = $JJ")
-    println(" LL = $LL")
+    # println("JJ = $JJ")
+    # println(" LL = $LL")
 
-    # TODO CAMBIA
-    # JJ = JJ[50:end]
+    # TODO CAMBIA! Parametri!
+    cutoff = 0.20
+    # Restrict the fit range! CHANGE!!
+    r_min_fit = 2
+    r_max_fit = 16
+
+    println("Putting a cutoff of J>$cutoff")
+    println("Fit range restricted to $r_min_fit<=r<=$r_max_fit")
+
+    JJ = JJ[ JJ.> cutoff]
 
     # Mastruzzo to extract array of Γ
     function parse_array(str)
@@ -311,11 +325,12 @@ function FitCorrelationFunction(FilePathIn::String,
     end
     
     Γall = [parse_array(row[7]) for row in eachrow(data)]
-    display(Γall) # (TODO check, but it seems to work)
+    # display(Γall) # (TODO check, but it seems to work)
 
     # Define the fit function [power-law fit of Γ(r)]
-    fit_func(x, p) = p[1]*x.^(-p[2]/2) # TODO disastri con 3 parametri
-    p0 = [1.0, 1.0] # Γ(0) = 1, K = boh
+    #fit_func(x, p) = p[1] .* exp.(-x./p[2]) # TODO disastri con 3 parametri
+    #fit_func(x, p) = p[1]*x.^(-p[2]/2) .* exp.(-x./p[3]) # TODO disastri con 3 parametri
+    fit_func(x, p) = p[1]*x.^(-p[2]/2)
 
     K = [] # K_∞ (thermodynamic limit) as a function of j
     e_K = [] # error on K_∞
@@ -327,92 +342,117 @@ function FitCorrelationFunction(FilePathIn::String,
         e_K_FSS = []
         chi2n_FSS = []
 
-        for L in LL
+        plot()
+        MyColors = ColorSchemes.tab10
+
+        for (l,L) in enumerate(LL)
             # Filter data for the current J and L
             filter = (data[:, 2] .== J) .& (data[:, 1] .== L)
 
             # Extract the correlators {Γ(r,J,L)}_r for the selected J,L
-            Γeven = Γall[filter] # this is an array, Γ(r even)
-            r = range(start=2, step=2, length=length(Γeven)) # r even
+            Γeven = Γall[filter][1] # this is an array, Γ(r even)
+            # display(Γeven)
+            r = collect(range(start=2, step=2, length=length(Γeven))) # r even
 
-            println("Fitting J=$J, L=$L, r=$r.")
+            fit_range_indices = findall(x -> x >= r_min_fit && x <= r_max_fit, r)
+            r = r[fit_range_indices]
+            Γeven = Γeven[fit_range_indices]
+            println("Fitting J=$J, L=$L, r=$r (set by r_min_fit, r_max_fit).")
 
             # Perform the fit of Γ(r) vs r, at fixed (J,L).
             # The argument w means weights, they should equal 1/σ^2. 
             # weights = 1.0 ./ e_Γeven.^2 # TODO estimate errors for Γeven!
-            # fit = curve_fit(fit_func, r, Γeven, p0) # w=weights 
+            p0 = [1.0, 1.0] # Γ(0) = 1, K = boh
+            fit = curve_fit(fit_func, r, Γeven, p0) # w=weights 
 
-            # println("Best-fit parameters:", fit.param)
+            println("  Best-fit parameters: ", fit.param)
 
-            # K_JL = fit.param[2] # K(J,L)
-            # e_K_JL = stderror(fit)[2]
-            # chi2n = sum(fit.resid.^2) / (length(r) - length(p0))
-            # push!(K_FSS, K_JL)
-            # push!(e_K_FSS, e_K_JL)
-            # push!(chi2n_FSS, chi2n)
+            K_JL = fit.param[2] # K(J,L)
+            e_K_JL = stderror(fit)[2]
+            chi2n = sum(fit.resid.^2) / (length(r) - length(p0))
+            push!(K_FSS, K_JL)
+            push!(e_K_FSS, e_K_JL)
+            push!(chi2n_FSS, chi2n)
 
-            if J == maximum(JJ) && L == minimum(LL)
+            if J == maximum(JJ)
                 # Make a single plot, hopefully representative of the first
                 # series of fits. Save the results.
-                scatter(r, Γeven,
+                color = MyColors[l % length(MyColors)]  # color for current L
+                K_JL_plot = round(K_JL, digits=2)
+
+                scatter!(r, Γeven,
                     xlabel=L"$r$",
                     ylabel=L"$\Gamma(r)$",
-                    title=L"Correlation function ($L=%$L, J=%$J, \mu=1.0$)",
-                    label="DMRG data",
-                    legend=:topright)
-                #fit_x = range(1.0, maximum(r), length=80)
-                #fit_y = fit_func(fit_x, fit.param)
-                #K_JL_plot = round(K_JL, digits=2)
-                #plot!(fit_x, fit_y, label=L"Best-fit ($K=%$K_JL_plot$)")
-                savefig(string(@__DIR__,"/../analysis/correlators_singleplot.pdf"))
+                    #title=L"Correlation function (J=%$J, \mu=1.0$)",
+                    label=L"$L=%$L$ ($K_\mathrm{fit}=%$K_JL_plot$)",
+                    legend=:topright,
+                    markersize=2,
+                    xscale=:log10,       # for log plot
+                    yscale=:log10,       # for log plot
+                    xticks=[1,10,100],   # for log plot
+                    xlimits=(1,100),     # for log plot
+                    color=color
+                    )
+                fit_x = range(1.5, maximum(r)*1.5, length=80)
+                fit_y = fit_func(fit_x, fit.param)
+                plot!(fit_x, fit_y, label=false, color=color, alpha=0.7)
+                if SingleFitPlotPathOut!=""
+                    title!(L"Correlation function power-law fit ($J=%$J$)")
+                    savefig(SingleFitPlotPathOut)
+                end
             end
         end
 
-        inv_LL = 1 ./ LL
+        # inv_LL = 1 ./ LL
 
-        fit_func_fss(x, p) = p[1] * x .+ p[2]
-        p0_FSS = [-1.0, 1.0]
+        # fit_func_fss(x, p) = p[1] * x .+ p[2]
+        # p0_FSS = [-1.0, 1.0]
 
-        fit_fss = curve_fit(fit_func_fss, inv_LL, K_FSS, p0_FSS)
-        K_J = fit_fss.param[2]
-        e_K_J = stderror(fit_fss)[2]
-        chi2n_J = sum(fit_fss.resid.^2)/(length(LL)-2)
-        push!(K, K_J)
-        push!(e_K, e_K_J)
-        push!(chi2n_K, chi2n_J)
+        # fit_fss = curve_fit(fit_func_fss, inv_LL, K_FSS, p0_FSS)
+        # K_J = fit_fss.param[2]
+        # e_K_J = stderror(fit_fss)[2]
+        # chi2n_J = sum(fit_fss.resid.^2)/(length(LL)-2)
+        # push!(K, K_J)
+        # push!(e_K, e_K_J)
+        # push!(chi2n_K, chi2n_J)
 
-        if J == maximum(JJ)
-            # Make a single FSS plot, hopefully representative of the second
-            # series of fits. Save the results.
-            fit_x = range(0.0, maximum(inv_LL), length=50)
-            fit_y = fit_func_fss(fit_x, fit_fss.param)
-            scatter(inv_LL, K_FSS,
-                xlabel=L"$1/L$",
-                ylabel=L"$K(J,L)$",
-                title=L"Exponent $K$ when $J=%$J$",
-                label="Fits from DMRG data",
-                legend=:topright)
-                K_infty_plot = round(K_J, digits=2)
-            plot!(fit_x, fit_y, label=L"Best-fit ($K_\infty = %$K_infty_plot$)")
-            savefig(string(@__DIR__,"/../analysis/correlations/correlators_singleplot_FSS.pdf"))
-        end
+        # if J == maximum(JJ)
+        #     # Make a single FSS plot, hopefully representative of the second
+        #     # series of fits. Save the results.
+        #     fit_x = range(0.0, maximum(inv_LL), length=50)
+        #     fit_y = fit_func_fss(fit_x, fit_fss.param)
+        #     scatter(inv_LL, K_FSS,
+        #         xlabel=L"$1/L$",
+        #         ylabel=L"$K(J,L)$",
+        #         title=L"Exponent $K$ when $J=%$J$",
+        #         label="Fits from DMRG data",
+        #         legend=:topright)
+        #         K_infty_plot = round(K_J, digits=2)
+        #     plot!(fit_x, fit_y, label=L"Best-fit ($K_\infty = %$K_infty_plot$)")
+        #     if FSSPlotPathOut!=""
+        #         savefig(FSSPlotPathOut)
+        #     end
+
+        # end
     end
 
-    # Join the results for saving correctly on file
-    results = hcat(JJ, K, e_K, chi2n_K)
+    # # Join the results for saving correctly on file
+    # results = hcat(JJ, K, e_K, chi2n_K)
 
-    # Save the results
-    open(FilePathOut, "w") do file
-        write(file, "# J, K_∞, e_K_∞, chi2n\n")
-        writedlm(file, results, ',')
-    end
+    # # Save the results
+    # open(FilePathOut, "w") do file
+    #     write(file, "# J, K_∞, e_K_∞, chi2n\n")
+    #     writedlm(file, results, ',')
+    # end
 
-    scatter(JJ, K, xlabel=L"$J$", ylabel=L"$K_\infty$", yerr=e_K, 
-        title=L"Power-law decay of correlation functions $\Gamma(r)$",
-        markersize=2,
-        label="Fitted data")
-    plot!(JJ, 0.5*ones(length(JJ)), label=L"$K_\mathrm{th} = 1/2$")
-    savefig(string(@__DIR__,"/../analysis/correlations/correlators_K.pdf"))
+    # scatter(JJ, K, xlabel=L"$J$", ylabel=L"$K_\infty$", yerr=e_K, 
+    #     title=L"Power-law decay of $\Gamma(r)$ ($%$r_min_fit \le r \le %$r_max_fit$)",
+    #     markersize=2,
+    #     label="Fitted data")
+    # plot!(JJ, 0.5*ones(length(JJ)), label=L"$K_\mathrm{th} = 1/2$")
+    # if PlotPathOut!=""
+    #     savefig(PlotPathOut)
+    # end
 end
 
 
@@ -425,37 +465,60 @@ function main()
     # i = ceil(Int64, L/2) # site on which to calculate variance
     # μ0 = 0.0
 
-    # ---------------------
-    # --- Plot Variance ---
-    # ---------------------
-    #PlotVariance("../simulations/data_variance.txt", L, nmax, i)
-    #savefig("../analysis/variance.pdf")
 
-    # ----------------------------------
-    # --- Boundary between SF and MI ---
-    # ----------------------------------
-    FilePathIn = PROJECT_ROOT * "/simulations/simulations_240406.txt"
+    ModeErrorMsg = "Input error: use option --boundaries or --gamma"
+	
+	if length(ARGS) != 1
+		# If user does not specify the user mode
+		error(ModeErrorMsg)
+		exit()
+	else
+        UserMode = ARGS[1]
+        # ---------------------
+        # --- Plot Variance ---
+        # ---------------------
+        # TODO add flag for Variance and other modes
+        #PlotVariance("../simulations/data_variance.txt", L, nmax, i)
+        #savefig("../analysis/variance.pdf")
 
-    PhaseBoundariesDir = PROJECT_ROOT * "/analysis/phase_boundaries/"
-    
-    FilePathPlot = PhaseBoundariesDir * "phaseboundaries_240406.pdf"
-    FilePathFit = PhaseBoundariesDir * "fitted_phase_boundaries.txt"
-    
-    FilePathPlotOut = PhaseBoundariesDir * "phaseboundaries_240406_fit.pdf"
-    FilePathSinglePlotOut = PhaseBoundariesDir * "phaseboundaries_240406_fit_single.pdf"
+        # ----------------------------------
+        # --- Boundary between SF and MI ---
+        # ----------------------------------
+        if UserMode=="--boundaries"    
+            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[40 60 80 100].txt"
+            PhaseBoundariesDir = PROJECT_ROOT * "/../analysis/phase_boundaries/"
+            
+            FilePathPlot = PhaseBoundariesDir * "phaseboundaries_240408.pdf"
+            FilePathFit = PhaseBoundariesDir * "fitted_phase_boundaries.txt"
+            
+            FilePathPlotOut = PhaseBoundariesDir * "phaseboundaries_240408_fit.pdf"
+            FilePathSinglePlotOut = PhaseBoundariesDir * "phaseboundaries_240408_fit_single.pdf"
 
-    PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut=FilePathPlot)
+            PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut=FilePathPlot)
 
-    FitPhaseBoundaries(FilePathIn, FilePathFit; FilePathPlotOut, FilePathSinglePlotOut)
-    
-    # ------------------------------
-    # --- Correlation function Γ ---
-    # ------------------------------
-    FilePathFit = PROJECT_ROOT * "/analysis/correlations/fit_correlation.txt"
-    FileGammaPlot = PROJECT_ROOT * "/analysis/correlations/single_correlation.pdf"
+            FitPhaseBoundaries(FilePathIn, FilePathFit; FilePathPlotOut, FilePathSinglePlotOut)
 
-    j = 8 # CHANGE: which J to choose for the plot
-    PlotCorrelationFunction(FilePathIn, j; FilePathOut=FileGammaPlot)
+        # ------------------------------
+        # --- Correlation function Γ ---
+        # ------------------------------
+        elseif UserMode=="--gamma"
+            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[100].txt"
+            
+            # PLOT
+            FileGammaPlot = PROJECT_ROOT * "/../analysis/correlations/single_correlation.pdf"
+            j = 24 # CHANGE: which J to choose for the plot
+            PlotCorrelationFunction(FilePathIn, j; FilePathOut=FileGammaPlot, overwrite=false)
+
+            # FIT (& PLOT)
+            PlotPathOut = PROJECT_ROOT * "/../analysis/correlations/plot.pdf"
+            SinglePlotPathOut = PROJECT_ROOT * "/../analysis/correlations/plotsingle.pdf"
+            FilePathFit = PROJECT_ROOT * "/../analysis/correlations/fit_correlation.txt"
+            FitCorrelationFunction(FilePathIn, FilePathFit; PlotPathOut=PlotPathOut, SingleFitPlotPathOut=SinglePlotPathOut)
+		else
+			error(ModeErrorMsg)
+			exit()
+        end
+	end
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

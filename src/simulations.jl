@@ -15,54 +15,61 @@ PROJECT_ROOT *= "/.."	# Absloute path up to .../BoseHubbardDMRG/
 
 # ------------------------------ Horizontal sweep ------------------------------
 
+using Base.Threads
+using DelimitedFiles  # For writedlm
+
 function HorizontalSweep(L::Int64,
-						 nmax::Int64,
-						 JJ::Array{Float64},
-    					 DMRGParameters::Vector{Any},    					 
-    					 FilePathOut::String; 
-    					 μ0=0.0)
-    					 
+                         nmax::Int64,
+                         JJ::Array{Float64},
+                         DMRGParameters::Vector{Any},                         
+                         FilePathOut::String; 
+                         μ0=0.0)
     """
     Calculate two relevant observables for the MI-SF transition.
         - Phase boundaries,
         - Correlation function.
     Use μ0=0 by default (SF phase).
     """
-	
-	DataFile = open(FilePathOut,"a")
-    E = zeros(Float64, 3)
+    
+    DataFile = open(FilePathOut, "a")
+    
+    for (j, J) in enumerate(JJ)
+        println("Running DMRG for J=$(round(J, digits=3)), μ=$μ0 (simulation ",
+                "$j/$(length(JJ)) for L=$L)")
+        
+        # Use @sync to wait for all tasks to complete
+        @sync begin
+            # Create tasks for each DMRG call
+            task1 = @spawn RunDMRGAlgorithm([L, L-1, nmax, J, μ0], 
+                                             DMRGParameters; 
+                                             FixedN = true)
+            task2 = @spawn RunDMRGAlgorithm([L, L, nmax, J, μ0], 
+                                             DMRGParameters; 
+                                             ComputeGamma=true, 
+                                             FixedN = true)
+            task3 = @spawn RunDMRGAlgorithm([L, L+1, nmax, J, μ0], 
+                                             DMRGParameters; 
+                                             FixedN = true)
 
-        for (j, J) in enumerate(JJ)
-            println("Running DMRG for J=$(round(J,digits=3)), μ=$μ0 (simulation ",
-            		"$j/$(length(JJ)) for L=$L)")
-            
-           	"""
-           	Simulation at different filling fraction. By default, only energies
-           	and the number variance are extracted, and only for unitary filling
-           	nVariance is saved; the intermediate simulation also extracts Gamma,
-           	(later used) while C is never extracted. Default boolean values for
-           	all of these are false.            
-            """
-            
-            E[1], _, = RunDMRGAlgorithm([L, L-1, nmax, J, μ0], 
-                                    	DMRGParameters;
-                                    	FixedN = true)
-            E[2], nVariance, Γ, _ = RunDMRGAlgorithm([L, L, nmax, J, μ0], 
-                                            	   	 DMRGParameters;
-				                            	   	 ComputeGamma=true, 
-						                           	 FixedN = true)
-            E[3], _, = RunDMRGAlgorithm([L, L+1, nmax, J, μ0], 
-                                    	DMRGParameters; 
-		                                FixedN = true)
+            # Wait for all tasks to complete and collect results
+            E1, _ = fetch(task1)
+            E2, nVariance, Γ, _ = fetch(task2)
+            E3, _ = fetch(task3)
+
+            # Store results in the E array
+            E = [E1, E2, E3]
+
+            # Calculate chemical potentials
             ΔEplus = E[3] - E[2]
             ΔEminus = E[2] - E[1]
-
             μUp = ΔEplus + μ0
             μDown = -ΔEminus + μ0
 
-            write(DataFile,"$L; $J; $(E[2]); $μUp; $μDown; $nVariance; $Γ\n")
+            # Write results to the file
+            write(DataFile, "$L; $J; $(E[2]); $μUp; $μDown; $nVariance; $Γ\n")
         end
     end
+    
     close(DataFile)
     println("Data for L=$L saved on file!")
 end
@@ -128,60 +135,60 @@ end
 
 # -------------------------------- Path sweep ----------------------------------
 
-function PathSweep(Path::NamedTuple(Name::String, Values::Vector{Tuple{Int64, Int64}}),
-				   L::Int64,
-				   N::Int64,
-				   nmax::Int64,
-				   DMRGParametersMI::Vector{Any},
-				   DMRGParametersSF::Vector{Any},
-				   FilePathIn::String,				# To evaluate if a given point is MI or SF
-				   FilePathOut::String)
+# function PathSweep(Path::NamedTuple(Name::String, Values::Vector{Tuple{Int64, Int64}}),
+# 				   L::Int64,
+# 				   N::Int64,
+# 				   nmax::Int64,
+# 				   DMRGParametersMI::Vector{Any},
+# 				   DMRGParametersSF::Vector{Any},
+# 				   FilePathIn::String,				# To evaluate if a given point is MI or SF
+# 				   FilePathOut::String)
 				   
-	Sizes, Couplings, Energies, UpBoundaries, DownBoundaries, _, _ = readdlm(FilePathIn, ';', Float64, '\n'; comments=true)
-	IndicesList = findall(==(L), Sizes)
+# 	Sizes, Couplings, Energies, UpBoundaries, DownBoundaries, _, _ = readdlm(FilePathIn, ';', Float64, '\n'; comments=true)
+# 	IndicesList = findall(==(L), Sizes)
 				   
-	for Point in Path.Values
-		J, μ = Point
+# 	for Point in Path.Values
+# 		J, μ = Point
 				                      
-		# Possible improvement: we know how many simulations have been performed for each L
-    	Index = IndicesList[findall(==(J), Couplings[IndicesList])]
-    	μUp = UpBoundaries[Index]
-    	μDown = DownBoundaries[Index]
+# 		# Possible improvement: we know how many simulations have been performed for each L
+#     	Index = IndicesList[findall(==(J), Couplings[IndicesList])]
+#     	μUp = UpBoundaries[Index]
+#     	μDown = DownBoundaries[Index]
         
-        ModelParameters = [L, N, nmax, J, μ]
-		inMottLobe = false
+#         ModelParameters = [L, N, nmax, J, μ]
+# 		inMottLobe = false
 		
-		if (μ>=μDown && μ<=μUp)
-			inMottLobe=true
-		end
+# 		if (μ>=μDown && μ<=μUp)
+# 			inMottLobe=true
+# 		end
 		
-		if inMottLobe
-            _, _, _, C = RunDMRGAlgorithm(ModelParameters,
-                                          DMRGParametersMI;
-                                          ComputeC = true,
-                                          FixedN = false)
-        else
-        	_, _, _, C = RunDMRGAlgorithm(ModelParameters,
-                                          DMRGParametersSF;
-	                                      ComputeC = true,
-	                                      FixedN = false)
-        end                
+# 		if inMottLobe
+#             _, _, _, C = RunDMRGAlgorithm(ModelParameters,
+#                                           DMRGParametersMI;
+#                                           ComputeC = true,
+#                                           FixedN = false)
+#         else
+#         	_, _, _, C = RunDMRGAlgorithm(ModelParameters,
+#                                           DMRGParametersSF;
+# 	                                      ComputeC = true,
+# 	                                      FixedN = false)
+#         end                
         
-        # Perform DFT
-        D = 0
-        q = 2*pi/L
-        for r in 1:length(C)
-        	D += (-1)^(2*r/L) * C[r] # Numerically smarter than using the imaginary unit
-        end
-        K = 1/(L*D)
+#         # Perform DFT
+#         D = 0
+#         q = 2*pi/L
+#         for r in 1:length(C)
+#         	D += (-1)^(2*r/L) * C[r] # Numerically smarter than using the imaginary unit
+#         end
+#         K = 1/(L*D)
         
-        DataFile = open(FilePathOut, "a")
-        write(DataFile, "$L, $J, $μ, $D, $K")
+#         DataFile = open(FilePathOut, "a")
+#         write(DataFile, "$L, $J, $μ, $D, $K")
 		
-	end
-	close(DataFile)
-    println("Data for L=$L saved on file!")
-end
+# 	end
+# 	close(DataFile)
+#     println("Data for L=$L saved on file!")
+# end
 
 # ------------------------------------------------------------------------------
 # ------------------------------------ Main ------------------------------------
@@ -190,18 +197,18 @@ end
 function main()
 
     # TODO Import DMRG parameters from user input
-    nmax = 3
+    nmax = 4
 
     # Mott Insulator DMRG parameters
-    nsweeps = 5
+    nsweeps = 10
     maxlinkdim = [10,50,75,200,500]		# TODO Change with optimal values
-    cutoff = [1E-12]					# TODO Change with optimal values
+    cutoff = [1E-8]					    # TODO Change with optimal values
     DMRGParametersMI = [nsweeps, maxlinkdim, cutoff]
 
 	# Superfluid phase DMRG paramters
-	nsweeps = 5
+	nsweeps = 10
 	maxlinkdim = [10,50,75,200,500]		# TODO Change with optimal values
-	cutoff = [1E-12]					# TODO Change with optimal values
+	cutoff = [1E-8]					    # TODO Change with optimal values
 	DMRGParametersSF = [nsweeps, maxlinkdim, cutoff]
     
 	ModeErrorMsg = "Input error: use option --horizontal or --rectangular"
@@ -217,15 +224,16 @@ function main()
 
 			# Horizontal sweep
 	    	# TODO Import model parameters from user input
-	    	JJ = collect(range(start=0.0, stop=0.35, length=100))
-	    	LL = [10, 20, 30]
+	    	JJ = collect(range(start=0.0, stop=0.35, length=50))
+	    	LL = [10, 20, 30, 40, 50, 60]
+			μ0 = 0.0
 	    	
 	    	DirPathOut = PROJECT_ROOT * "/simulations/horizontal_sweep"
     		mkpath(DirPathOut)
 			FilePathOut = DirPathOut * "/L=$LL.txt"
 	    	
 	    	DataFile = open(FilePathOut,"w")
-			write(DataFile,"# Hubbard model DMRG. This file contains many sizes. nmax=$nmax, μ0=$μ0.\n")
+			write(DataFile,"# Hubbard model DMRG. This file contains many sizes. nmax=$nmax, μ0=$μ0, nsweeps=$nsweeps, cutoff=$cutoff\n")
 			write(DataFile,"# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ [calculated $(now())]\n")
 			close(DataFile)
 	    	
@@ -233,7 +241,7 @@ function main()
         		println("Starting calculation of observables for L=$L...")
 				
 				# TODO Evaluate: use superfluid DMRG paramters?
-				HorizontalSweep(L, nmax, JJ, DMRGParametersSF, FilePathOut)
+				HorizontalSweep(L, nmax, JJ, DMRGParametersSF, FilePathOut; μ0=μ0)
 			end
 			
 			println("Done!")

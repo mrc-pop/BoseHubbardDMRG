@@ -93,11 +93,11 @@ end
 function main()
 
 	# TODO Import model parameters from user input
-	L = 10
-	N = 10
+	L = 50
+	N = 50
 	nmax = 3
 	J = 0.2
-	μ = 0.6
+	μ = 1.0
 	ModelParameters = [L, N, nmax, J, μ]
 	
 	# TODO import DMRG parameters from user input 

@@ -321,10 +321,10 @@ function main()
     L = 10
     N = 10
     nmax = 3
-    J = 0.1
-    μ = 0.8
+    J = 0.4
+    μ = 1.0
 
-    nsweep = 5
+    nsweep = 10
     maxlinkdim = [10,50,75,200,500]
     cutoff = [1E-13]
     DMRGParameters = [nsweep, maxlinkdim, cutoff]
@@ -334,9 +334,9 @@ function main()
     # ------------------------------
     Observables = RunDMRGAlgorithm([L, N, nmax, J, μ],
     							    DMRGParameters;
-    								ComputeAllObservables=true, 
+    								#ComputeAllObservables=true, 
     								verbose=true) 
-    E, aAvg, nMean, nVariance, LocalE, Γ, C, psi = Observables
+    E, nVariance, _, _ = Observables
 
     println("Energy of ground state: $(round.(E, digits=4))\n")
     println("\"Local\" part of energy: $(round.(LocalE, digits=4))\n")
