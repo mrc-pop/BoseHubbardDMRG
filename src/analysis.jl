@@ -316,11 +316,15 @@ function FitCorrelationFunction(FilePathIn::String,
     JJ = JJ[ JJ.> J_min]
 
     # Mastruzzo to extract array of Γ
-    function parse_array(str)
+    function ParseArray(str::String)
         return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
     end
     
-    Γall = [parse_array(row[7]) for row in eachrow(data)]
+    Γall = [ParseArray(row[7]) for row in eachrow(data)]
+    eΓall = [ParseArray(row[8]) for row in eachrow(data)]
+    Call = [ParseArray(row[9]) for row in eachrow(data)]
+    eCall = [ParseArray(row[10]) for row in eachrow(data)]
+    
     # display(Γall)
 
     # Define the fit function [power-law fit of Γ(r)]
