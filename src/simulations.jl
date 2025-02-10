@@ -211,7 +211,7 @@ function main()
 	cutoff = [1E-8]					    # TODO Change with optimal values
 	DMRGParametersSF = [nsweeps, maxlinkdim, cutoff]
     
-	ModeErrorMsg = "Input error: use option --horizontal or --rectangular"
+	ModeErrorMsg = "Input error: use option --horizontal, --rectangular or --path"
 	
 	if length(ARGS) != 1
 		# If user does not specify the user mode

@@ -1,6 +1,7 @@
 #!/usr/bin/julia
 
 using ITensors, ITensorMPS
+using Statistics
 using Plots; pgfplotsx()
 using ColorSchemes
 using LaTeXStrings
@@ -271,60 +272,90 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     	end
     end
 
-	# Calculate two-points correlator
+	# Calculate two-points and density-density correlators
 
-	iCenter = ceil(Int64, L/2)
-    if ComputeGamma || ComputeAllObservables
-    	# 2 point correlator Γ(r), r even, r < L/2
-    	
-    	Trash = floor(Int64, L/4)
-    	Start = Trash+1
-    	Stop = L-Trash
-    	
-    	Segment = L-2*Trash
-    	Spacings = collect(Int64, 2:2:Segment)
-    	Γ = zeros(Float64, length(Spacings))
+	Γ=false
+	eΓ=false
+	C=false
+	eC=false  
     
+    if ComputeGamma || ComputeC || ComputeAllObservables
+    	
+    	"""
+    	Procedure: discard half of the lattice (the first quarter and the last);
+    	what remains is used as a domain to sweep across, collecting 
+    	symmetrically two-points and density-density correlators; these last
+    	are then avereaged; error is taken as the statistical standard 
+    	deviation.
+    	"""
+    	
+    	Trash = floor(Int64, L/4)	# How many to discard from each side?
+    	Start = Trash+1				# Start of useful segment
+    	Stop = L-Trash				# End of useful segment
+    	
+    	Segment = L-2*Trash			# Segment lenght
+    	Spacings = collect(Int64, 2:2:Segment)
+    	
+    	# Conditional initializion (partitioned)
+    	if ComputeGamma || ComputeAllObservables
+			Γ = zeros(Float64, length(Spacings))
+			eΓ = zeros(Float64, length(Spacings))
+    	end
+    	
+    	# Conditional initializion (partitioned)
+    	if ComputeC || ComputeAllObservables
+			C = zeros(Float64, length(Spacings))
+			eC = zeros(Float64, length(Spacings))
+    	end
+    	
+    	# (Center) symmetric sweep
         for r in Spacings
+        
+        	if ComputeGamma || ComputeAllObservables
+				ΓTmpArray = []
+			elseif ComputeC || ComputeAllObservables
+				CTmpArray = []
+			end
+        	
         	i = Start
         	j = Start+r-1
-        	Counter = 0
         	while j<=Stop
-		        Γop = GetTwoPointCorrelator(sites, i, j) # Note: averaging included
-		        Γ[Int64(r/2)] += inner(psi', Γop, psi)
-		        
+
+        		if ComputeGamma || ComputeAllObservables
+			        ΓOp = GetTwoPointCorrelator(sites, i, j)
+			        ΓTmp = inner(psi', ΓOp, psi)
+			        push!(ΓTmpArray, ΓTmp)	
+			    elseif ComputeC || ComputeAllObservables
+			        COp = GetNumberCorrelator(sites, i, j)
+			        CTmp = inner(psi', COp, psi)
+			        push!(CTmpArray, CTmp)
+			    end
+			    
 		        i += 1
-		        j += 1
-		        Counter += 1
+		        j += 1   
 		    end
-		    Γ[Int64(r/2)] /= Counter
-        end
-    else
-		Γ=false    	
-    end
-    
-    # Calculate density-density correlator
-    
-    if ComputeC || ComputeAllObservables
-    	C = zeros(L-1)
-    	
-    	for j in 1:(iCenter-1)
-    		Cop = GetNumberCorrelator(sites, iCenter-j+1, iCenter+j)
-    		C[2*j-1] = inner(psi', Cop, psi)
-    		Cop = GetNumberCorrelator(sites, iCenter-j, iCenter+j)
-    		C[2*j] = inner(psi', Cop, psi)
-    	end
-    	C[L-1] = GetNumberCorrelator(sites, 1, L) # Last left to compute
-    else
-		C=false    	
+		    
+		    # Perform average and extract statistical error
+		    if ComputeGamma || ComputeAllObservables
+			    Γ[Int64(r/2)] = mean(ΓTmpArray)
+			    eΓ[Int64(r/2)] = std(ΓTmpArray)
+			elseif ComputeC || ComputeAllObservables
+				C[Int64(r/2)] = mean(ΓTmpArray)
+			    eC[Int64(r/2)] = std(ΓTmpArray)
+			end
+        
+        end  	
     end
 
-	if ComputeAllObservables	# Very slow
-	    return E, aAvg, nMean, nVariance, LocalE, Γ, C, psi
+	if ComputeAllObservables
+	    return E, aAvg, nMean, nVariance, LocalE, Γ, eΓ, C, eC, psi
+	
 	elseif ComputeGamma || ComputeC
-		return E, nVariance, Γ, C
+		return E, nVariance, Γ, eΓ, C, eC
+	
 	else
 		return E, nVariance
+	
 	end
 end
 
@@ -343,23 +374,26 @@ function main()
 
     nsweep = 10
     maxlinkdim = [10,50,75,200,500]
-    cutoff = [1E-13]
+    cutoff = [1E-8]
     DMRGParameters = [nsweep, maxlinkdim, cutoff]
 
-    # ------------------------------
-    # --- Results for single run ---
-    # ------------------------------
+    # --------------------------------
+    # --- Results for a single run ---
+    # --------------------------------
     Observables = RunDMRGAlgorithm([L, N, nmax, J, μ],
     							    DMRGParameters;
-    								#ComputeAllObservables=true, 
+    								ComputeAllObservables=true, 
     								verbose=true) 
-    E, nVariance, _, _ = Observables
+    E, aAvg, nMean, nVariance, LocalE, Γ, eΓ, C, eC, psi = Observables
 
-    println("Energy of ground state: $(round.(E, digits=4))\n")
-    println("\"Local\" part of energy: $(round.(LocalE, digits=4))\n")
-    println("Mean number of particles: $(round.(nMean, digits=4))\n")
-    println("Variance number of particles: $(round.(nVariance, digits=4))\n")
-    println("Relative fluctuation: $(round.(sqrt.(nVariance)./nMean, digits=4))\n")
+    println("Results of the simulation:
+Energy of ground state: $(round.(E, digits=4))\n
+\"Local\" part of energy: $(round.(LocalE, digits=4))\n
+Mean number of particles: $(round.(nMean, digits=4))\n
+Variance number of particles: $(round.(nVariance, digits=4))\n
+Relative fluctuation: $(round.(sqrt.(nVariance)./nMean, digits=4))\n
+Two-points correlator: $(round.(Γ, digits=4))\n
+Density-density correlator: $(round.(C, digits=4))\n")
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__ # equivalent to if __name__ == "__main__"
