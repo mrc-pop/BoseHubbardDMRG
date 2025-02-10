@@ -1,2 +1,0 @@
-# Hubbard model DMRG. nmax=3, μ0=0.0.
-# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ [calculated 2025-02-05T15:00:48.942]

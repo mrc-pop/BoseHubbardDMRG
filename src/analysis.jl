@@ -297,6 +297,11 @@ function FitCorrelationFunction(FilePathIn::String,
     Then fit it against L to extract the thermodynamic limit K_∞(J).
     Finally, plot K_∞ against J.
     """
+
+    # CHANGE: PLOT & FIT PARAMETERS
+    J_min = 0.20
+    r_min_fit = 2
+    r_max_fit = 10
     
     # Read the input data
     data = readdlm(FilePathIn, ';', '\n'; comments=true)
@@ -305,19 +310,10 @@ function FitCorrelationFunction(FilePathIn::String,
     JJ = unique(data[:, 2])
     LL = unique(data[:, 1])
 
-    # println("JJ = $JJ")
-    # println(" LL = $LL")
-
-    # TODO CAMBIA! Parametri!
-    cutoff = 0.20
-    # Restrict the fit range! CHANGE!!
-    r_min_fit = 2
-    r_max_fit = 16
-
-    println("Putting a cutoff of J>$cutoff")
+    println("Putting a cutoff of J>$J_min")
     println("Fit range restricted to $r_min_fit<=r<=$r_max_fit")
 
-    JJ = JJ[ JJ.> cutoff]
+    JJ = JJ[ JJ.> J_min]
 
     # Mastruzzo to extract array of Γ
     function parse_array(str)
@@ -325,11 +321,11 @@ function FitCorrelationFunction(FilePathIn::String,
     end
     
     Γall = [parse_array(row[7]) for row in eachrow(data)]
-    # display(Γall) # (TODO check, but it seems to work)
+    # display(Γall)
 
     # Define the fit function [power-law fit of Γ(r)]
-    #fit_func(x, p) = p[1] .* exp.(-x./p[2]) # TODO disastri con 3 parametri
-    #fit_func(x, p) = p[1]*x.^(-p[2]/2) .* exp.(-x./p[3]) # TODO disastri con 3 parametri
+    # fit_func(x, p) = p[1] .* exp.(-x./p[2])
+    # fit_func(x, p) = p[1]*x.^(-p[2]/2) .* exp.(-x./p[3])
     fit_func(x, p) = p[1]*x.^(-p[2]/2)
 
     K = [] # K_∞ (thermodynamic limit) as a function of j
@@ -357,15 +353,15 @@ function FitCorrelationFunction(FilePathIn::String,
             fit_range_indices = findall(x -> x >= r_min_fit && x <= r_max_fit, r)
             r = r[fit_range_indices]
             Γeven = Γeven[fit_range_indices]
-            println("Fitting J=$J, L=$L, r=$r (set by r_min_fit, r_max_fit).")
+            println("\nFitting J=$J, L=$L, r=$r (set by r_min_fit, r_max_fit).")
 
             # Perform the fit of Γ(r) vs r, at fixed (J,L).
             # The argument w means weights, they should equal 1/σ^2. 
             # weights = 1.0 ./ e_Γeven.^2 # TODO estimate errors for Γeven!
-            p0 = [1.0, 1.0] # Γ(0) = 1, K = boh
+            p0 = [1.0, 1.0]
             fit = curve_fit(fit_func, r, Γeven, p0) # w=weights 
 
-            println("  Best-fit parameters: ", fit.param)
+            println("  Done. Best-fit parameters: ", round.(fit.param, digits=4))
 
             K_JL = fit.param[2] # K(J,L)
             e_K_JL = stderror(fit)[2]
@@ -389,6 +385,8 @@ function FitCorrelationFunction(FilePathIn::String,
                     markersize=2,
                     xscale=:log10,       # for log plot
                     yscale=:log10,       # for log plot
+                    ##yticks=[0.1, 1],     # for log plot
+                    ##ylimits=(0.1, 1),    # for log plot
                     xticks=[1,10,100],   # for log plot
                     xlimits=(1,100),     # for log plot
                     color=color
@@ -403,56 +401,81 @@ function FitCorrelationFunction(FilePathIn::String,
             end
         end
 
-        # inv_LL = 1 ./ LL
+        if length(LL)>1
+            # FSS fit.
+            inv_LL = 1 ./ LL
 
-        # fit_func_fss(x, p) = p[1] * x .+ p[2]
-        # p0_FSS = [-1.0, 1.0]
+            fit_func_fss(x, p) = p[1] * x .+ p[2]
+            p0_FSS = [-1.0, 1.0]
 
-        # fit_fss = curve_fit(fit_func_fss, inv_LL, K_FSS, p0_FSS)
-        # K_J = fit_fss.param[2]
-        # e_K_J = stderror(fit_fss)[2]
-        # chi2n_J = sum(fit_fss.resid.^2)/(length(LL)-2)
-        # push!(K, K_J)
-        # push!(e_K, e_K_J)
-        # push!(chi2n_K, chi2n_J)
+            # If there is more than 1 size, perform the FSS fit 
+            fit_fss = curve_fit(fit_func_fss, inv_LL, K_FSS, p0_FSS)
+            K_J = fit_fss.param[2]
+            e_K_J = stderror(fit_fss)[2]
+            chi2n_J = sum(fit_fss.resid.^2)/(length(LL)-2)
+            push!(K, K_J)
+            push!(e_K, e_K_J)
+            push!(chi2n_K, chi2n_J)
 
-        # if J == maximum(JJ)
-        #     # Make a single FSS plot, hopefully representative of the second
-        #     # series of fits. Save the results.
-        #     fit_x = range(0.0, maximum(inv_LL), length=50)
-        #     fit_y = fit_func_fss(fit_x, fit_fss.param)
-        #     scatter(inv_LL, K_FSS,
-        #         xlabel=L"$1/L$",
-        #         ylabel=L"$K(J,L)$",
-        #         title=L"Exponent $K$ when $J=%$J$",
-        #         label="Fits from DMRG data",
-        #         legend=:topright)
-        #         K_infty_plot = round(K_J, digits=2)
-        #     plot!(fit_x, fit_y, label=L"Best-fit ($K_\infty = %$K_infty_plot$)")
-        #     if FSSPlotPathOut!=""
-        #         savefig(FSSPlotPathOut)
-        #     end
+            if J == maximum(JJ)
+                # Make a single FSS plot, hopefully representative of the second
+                # series of fits. Save the results.
+                fit_x = range(0.0, maximum(inv_LL), length=50)
+                fit_y = fit_func_fss(fit_x, fit_fss.param)
+                scatter(inv_LL, K_FSS,
+                    xlabel=L"$1/L$",
+                    ylabel=L"$K(J,L)$",
+                    title=L"Exponent $K$ when $J=%$J$",
+                    label="Fits from DMRG data",
+                    legend=:topright)
+                    K_infty_plot = round(K_J, digits=2)
+                plot!(fit_x, fit_y, label=L"Best-fit ($K_\infty = %$K_infty_plot$)")
+                if FSSPlotPathOut!=""
+                    savefig(FSSPlotPathOut)
+                end
+            end
+        elseif length(LL)==1
+            push!(K, K_FSS[1])
+        end
+    end # end loop over J
 
-        # end
+    if length(LL)==1 
+        # If only 1 size, bypass the FSS fit, plot the results (K(L) vs J).
+        L = LL[1]
+
+        println("Note: number of sizes is $(length(LL)). Skipping FSS fit.")
+
+        scatter(JJ, K, xlabel=L"$J$", ylabel=L"$K$",
+            title=L"Power-law decay of $\Gamma(r)$ ($%$r_min_fit \le r \le %$r_max_fit$)",
+            markersize=2,
+            label="Data for L=$L")
+        plot!(JJ, 0.5*ones(length(JJ)), label=L"$K_\mathrm{th} = 1/2$")
+        
+        if PlotPathOut!=""
+            savefig(PlotPathOut)
+            println("Plotted K(L=$L) vs J on file.")
+        end
+        
+    elseif length(LL)>1
+        # Join the results for saving correctly on file
+        results = hcat(JJ, K, e_K, chi2n_K)
+
+        # Save the results
+        open(FilePathOut, "w") do file
+            write(file, "# J, K_∞, e_K_∞, chi2n\n")
+            writedlm(file, results, ',')
+        end
+
+        # Plot the results (K_∞ vs J)
+        scatter(JJ, K, xlabel=L"$J$", ylabel=L"$K_\infty$", yerr=e_K, 
+            title=L"Power-law decay of $\Gamma(r)$ ($%$r_min_fit \le r \le %$r_max_fit$)",
+            markersize=2,
+            label="Fitted data")
+        plot!(JJ, 0.5*ones(length(JJ)), label=L"$K_\mathrm{th} = 1/2$")
+        if PlotPathOut!=""
+            savefig(PlotPathOut)
+        end     
     end
-
-    # # Join the results for saving correctly on file
-    # results = hcat(JJ, K, e_K, chi2n_K)
-
-    # # Save the results
-    # open(FilePathOut, "w") do file
-    #     write(file, "# J, K_∞, e_K_∞, chi2n\n")
-    #     writedlm(file, results, ',')
-    # end
-
-    # scatter(JJ, K, xlabel=L"$J$", ylabel=L"$K_\infty$", yerr=e_K, 
-    #     title=L"Power-law decay of $\Gamma(r)$ ($%$r_min_fit \le r \le %$r_max_fit$)",
-    #     markersize=2,
-    #     label="Fitted data")
-    # plot!(JJ, 0.5*ones(length(JJ)), label=L"$K_\mathrm{th} = 1/2$")
-    # if PlotPathOut!=""
-    #     savefig(PlotPathOut)
-    # end
 end
 
 
@@ -485,7 +508,7 @@ function main()
         # --- Boundary between SF and MI ---
         # ----------------------------------
         if UserMode=="--boundaries"    
-            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[40 60 80 100].txt"
+            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60].txt"
             PhaseBoundariesDir = PROJECT_ROOT * "/../analysis/phase_boundaries/"
             
             FilePathPlot = PhaseBoundariesDir * "phaseboundaries_240408.pdf"
@@ -502,16 +525,16 @@ function main()
         # --- Correlation function Γ ---
         # ------------------------------
         elseif UserMode=="--gamma"
-            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[100].txt"
+            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60].txt"
             
             # PLOT
-            FileGammaPlot = PROJECT_ROOT * "/../analysis/correlations/single_correlation.pdf"
-            j = 24 # CHANGE: which J to choose for the plot
+            FileGammaPlot = PROJECT_ROOT * "/../analysis/correlations/gamma_data_plot.tex"
+            j = 50 # CHANGE: which J to choose for the plot
             PlotCorrelationFunction(FilePathIn, j; FilePathOut=FileGammaPlot, overwrite=false)
 
             # FIT (& PLOT)
-            PlotPathOut = PROJECT_ROOT * "/../analysis/correlations/plot.pdf"
-            SinglePlotPathOut = PROJECT_ROOT * "/../analysis/correlations/plotsingle.pdf"
+            PlotPathOut = PROJECT_ROOT * "/../analysis/correlations/gamma_final_plot.pdf"
+            SinglePlotPathOut = PROJECT_ROOT * "/../analysis/correlations/gamma_power_law_fit_plot.pdf"
             FilePathFit = PROJECT_ROOT * "/../analysis/correlations/fit_correlation.txt"
             FitCorrelationFunction(FilePathIn, FilePathFit; PlotPathOut=PlotPathOut, SingleFitPlotPathOut=SinglePlotPathOut)
 		else

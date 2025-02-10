@@ -1,2 +1,0 @@
-# Hubbard model DMRG. This file contains many sizes. nmax=3, μ0=0.0.
-# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ [calculated 2025-02-08T16:55:35.361]
