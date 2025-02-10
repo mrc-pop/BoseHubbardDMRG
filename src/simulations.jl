@@ -226,7 +226,7 @@ function main()
 			# Horizontal sweep
 	    	# TODO Import model parameters from user input
 	    	JJ = collect(range(start=0.0, stop=0.35, length=50))
-	    	LL = [10, 20, 30, 40] # [50, 60, 70]
+	    	LL = [50, 60, 70] # [10, 20, 30, 40] 
 			μ0 = 0.0
 	    	
 	    	DirPathOut = PROJECT_ROOT * "/simulations/horizontal_sweep"
