@@ -45,7 +45,8 @@ function HorizontalSweep(L::Int64,
                                              FixedN = true)
             task2 = @spawn RunDMRGAlgorithm([L, L, nmax, J, μ0], 
                                              DMRGParameters; 
-                                             ComputeGamma=true, 
+                                             ComputeGamma=true,
+                                             ComputeC = true,
                                              FixedN = true)
             task3 = @spawn RunDMRGAlgorithm([L, L+1, nmax, J, μ0], 
                                              DMRGParameters; 
@@ -53,7 +54,7 @@ function HorizontalSweep(L::Int64,
 
             # Wait for all tasks to complete and collect results
             E1, _ = fetch(task1)
-            E2, nVariance, Γ, _ = fetch(task2)
+            E2, nVariance, Γ, eΓ, C, eC = fetch(task2)
             E3, _ = fetch(task3)
 
             # Store results in the E array
@@ -66,7 +67,7 @@ function HorizontalSweep(L::Int64,
             μDown = -ΔEminus + μ0
 
             # Write results to the file
-            write(DataFile, "$L; $J; $(E[2]); $μUp; $μDown; $nVariance; $Γ\n")
+            write(DataFile, "$L; $J; $(E[2]); $μUp; $μDown; $nVariance; $Γ; $eΓ; $C; $eC\n")
         end
     end
     
@@ -234,7 +235,7 @@ function main()
 	    	
 	    	DataFile = open(FilePathOut,"w")
 			write(DataFile,"# Hubbard model DMRG. This file contains many sizes. nmax=$nmax, μ0=$μ0, nsweeps=$nsweeps, cutoff=$cutoff\n")
-			write(DataFile,"# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ [calculated $(now())]\n")
+			write(DataFile,"# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ; eΓ; C; eC [calculated $(now())]\n")
 			close(DataFile)
 	    	
 	    	for L in LL
