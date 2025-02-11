@@ -95,20 +95,23 @@ function RectangularSweep(i::Int64,
     DataFile = open(FilePathOut, "w")
     write(DataFile,"# Hubbard model DMRG. L=$L, N=$N, nmax=$nmax\n")
     write(DataFile,"# NOTE: Different DMRG settings have been used for MI and SF. Check the code.\n")
-    write(DataFile,"# J, μ, E, n_variance [calculated $(now()) @site  i=$i]\n")
+    write(DataFile,"# J, μ, E, n_variance, <a_i> [calculated $(now()) @site  i=$i]\n")
 
-	# TODO Generate file from fitting data of horizontal sweeps to separate MI from SF
-	Sizes, Couplings, Energies, UpBoundaries, DownBoundaries, _, _ = readdlm(FilePathIn, ';', Float64, '\n'; comments=true)
-	IndicesList = findall(==(L), Sizes)
+	# Take data from fitting data of horizontal sweeps to separate MI from SF 
+	# ( use ΔE^+(∞) and ΔE^-(∞) )
+	BoundariesData = readdlm(FilePathIn, ',', Float64, '\n'; comments=true)
 
-    for J in JJ
+    for (j,J) in enumerate(JJ)
+		# We take the best approximating J ∈ JJ, to assess whether we are in the MI or SF phase
+
+		# Index = findall(==(J), BoundariesData[:,1]) # this would work if there is the EXACT J in the fit results
+		Index = argmin(abs.(JJ .- J)) # this always works, gives the best approximation
+		μUp = BoundariesData[Index,2][1]
+		μDown = -BoundariesData[Index,3][1]
     	
-    	# Possible improvement: we know how many simulations have been performed for each L
-    	Index = IndicesList[findall(==(J), Couplings[IndicesList])]
-    	μUp = UpBoundaries[Index]
-    	μDown = DownBoundaries[Index]
-    	
-        for μ in μμ
+		println("\nJ=$J, phase boundaries: μ^+=$μUp, μ^-=$μDown")
+
+        for (m,μ) in enumerate(μμ)
         
             ModelParameters = [L, N, nmax, J, μ]
 			inMottLobe = false
@@ -116,17 +119,22 @@ function RectangularSweep(i::Int64,
 			if (μ>=μDown && μ<=μUp)
 				inMottLobe=true
 			end
-			
+
+			println("Running DMRG for L=$L, J=$(round(J, digits=3)), μ=$(round(μ, digits=3)) (simulation ",
+			"$m/$(length(μμ)) in μ, $j/$(length(JJ)) in J, MI=$inMottLobe)")
+
 			if inMottLobe
-	            E, nVariance = RunDMRGAlgorithm(ModelParameters,
+	            E, nVariance, aAvg = RunDMRGAlgorithm(ModelParameters,
 	                                            DMRGParametersMI;
-	                                            FixedN = false)
-	            write(DataFile,"$J, $μ, $E, $(nVariance[i]) # MI\n")
+	                                            FixedN = false,
+												RandomMPS = true)
+	            write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]) # MI\n")
 	        else
-	        	E, nVariance = RunDMRGAlgorithm(ModelParameters,
+	        	E, nVariance, aAvg = RunDMRGAlgorithm(ModelParameters,
 	                                            DMRGParametersSF;
-  		                                        FixedN = false)
-	            write(DataFile,"$J, $μ, $E, $(nVariance[i]) # SF\n")
+  		                                        FixedN = false,
+												RandomMPS = true)
+	            write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]) # SF\n")
 	        end
         end
     end
@@ -207,7 +215,7 @@ function main()
     DMRGParametersMI = [nsweeps, maxlinkdim, cutoff]
 
 	# Superfluid phase DMRG paramters
-	nsweeps = 10
+	nsweeps = 20
 	maxlinkdim = [10,50,75,200,500]		# TODO Change with optimal values
 	cutoff = [1E-8]					    # TODO Change with optimal values
 	DMRGParametersSF = [nsweeps, maxlinkdim, cutoff]
@@ -250,12 +258,13 @@ function main()
 		elseif UserMode=="--rectangular"
 
 			# Rectangular sweep
-		    NN = [10, 20, 30]								# TODO Change
-		    LL = [10, 20, 30] 					# TODO Change
-		    JJ = [J for J in 0.0:0.03:0.3]		# TODO Change, exclude J=0
-		    μμ = [μ for μ in 0.0:0.1:1.0]		# TODO Change
+		    NN = [12]					# TODO Change
+		    LL = [12] 					# TODO Change
+		    JJ = [J for J in range(start=0.0, stop=0.35, length=20)]		# TODO Change, exclude J=0
+		    μμ = [μ for μ in range(start=0.1, stop=1.0, length=20)]			# TODO Change
 
-			FilePathIn =  PROJECT_ROOT * "/simulations/horizontal_sweep/L=$LL.txt"
+			#FilePathIn =  PROJECT_ROOT * "/simulations/horizontal_sweep/L=$LL.txt"
+			FilePathIn =  PROJECT_ROOT * "/analysis/phase_boundaries/fitted_phase_boundaries.txt"
 
 			for i in 1:length(LL)
 			
@@ -265,12 +274,13 @@ function main()
 				# TODO As for now, we are using for each L the local boundary.
 				# TODO We may as well import the fitted function and locally
 				# TODO calculate the thermodynamic boundary value.
+				# ah, forse allora ho fatto proprio questo, usando direttamente i boundaries "veri" L → ∞
 				
-				i = ceil(Int64, L/2) 				# Site to calculate variance on
+				i = ceil(Int64, L/2) # Site to calculate variance on
 				
 				DirPathOut = PROJECT_ROOT * "/simulations/rectangular_sweep"
 	    		mkpath(DirPathOut)
-				FilePathOut = DirPathOut * "/L=$L_site=$i.txt"
+				FilePathOut = DirPathOut * "/L=$(L)_site=$i.txt"
 				
 				RectangularSweep(i, L, N, nmax, JJ, μμ, DMRGParametersMI, DMRGParametersSF, FilePathIn, FilePathOut)
 			end

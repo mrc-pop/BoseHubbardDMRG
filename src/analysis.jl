@@ -8,33 +8,97 @@ using LsqFit
 include(PROJECT_ROOT * "/dmrg.jl")
 include(PROJECT_ROOT * "/graphic_setup.jl")
 
-function PlotVariance(FilePath::String, L, nmax, i)
-
+function PlotHeatmap(L::Int64,
+                      FilePath::String;
+                      FilePathHorizontalSweepIn="",
+                      FilePathOut="",
+                      FilePathOutA="")
     """
-    Plot the variance of the number of particles on site `i` from data saved
+    Plot the variance of the number of particles from data saved
     in `FilePath`.
     """
     
+    # Extract data coming from rectangular_sweep
     VarianceData = readdlm(FilePath, ',', Float64, '\n'; comments=true)
 
     JJ = VarianceData[:,1]
     μμ = VarianceData[:,2]
-    varvar = VarianceData[:,3]
+    EE = VarianceData[:,3]
+    varvar = VarianceData[:,4]
+    aa = VarianceData[:,5]
 
     NumJ = length(unique(JJ))
     Numμ = length(unique(μμ))
 
+    # Store variance and order parameter <a_i>
     vars = zeros(Numμ, NumJ)
+    orderparameters = zeros(Numμ, NumJ)
 
     for jj in 1:NumJ
         vars[:,jj] = varvar[ Numμ*(jj-1)+1 : Numμ*jj ]
+        orderparameters[:,jj] = aa[ Numμ*(jj-1)+1 : Numμ*jj ]
     end
 
+    i = (ceil(Int64, L/2)) # site index
+
+    # Plot variance
     heatmap(unique(JJ), unique(μμ), vars, 
-        xlabel=L"J", ylabel=L"μ", 
-        title=L"Variance on $n_i$ ($L=%$L, n_\mathrm{max}=%$nmax, i=%$i$)", 
-        size=(600, 400))
-    println("Variance plot saved on file!")
+            xlabel=L"J",
+            ylabel=L"μ",
+            title=L"Variance $\delta n_i^2$ ($L=%$L, i=%$i$)")
+    ylabel!(L"μ")
+
+    if FilePathHorizontalSweepIn != ""
+        # If this argument is specified, plot the finite-size
+        # phase boundaries, for the closest L available
+        BoundariesData = readdlm(FilePathHorizontalSweepIn, ';', '\n'; comments=true)
+        LL = unique(BoundariesData[:, 1])
+
+        L_PB_index = argmin(abs.(LL .- L)) # best approximation of L
+        L_PhaseBoundaries = LL[L_PB_index]
+
+        if L_PhaseBoundaries !== L
+            println("L=$L is not among horizontal data. Using the closest available size, L=$L_PhaseBoundaries. ")
+        end
+
+        # Filter data corresponding to L_PhaseBoundaries
+        indices = (BoundariesData[:, 1] .== L_PhaseBoundaries)
+        JJ_PB = BoundariesData[indices, 2]
+        ΔEplus = BoundariesData[indices, 4]
+        ΔEminus = BoundariesData[indices, 5]
+        
+        plot!(JJ_PB, -ΔEminus, 
+            #xlabel=L"$J$", ylabel=L"$\mu$",
+            label=L"$L=%$L_PhaseBoundaries$",
+            seriestype=:scatter,
+            markersize=1.5,
+            color="green",
+            xlimits=(minimum(JJ), maximum(JJ)),
+            ylimits=(minimum(μμ), maximum(μμ)))
+        plot!(JJ_PB, ΔEplus, seriestype=:scatter,
+            label="",
+            markersize=1.5,
+            color="green",
+            xlimits=(minimum(JJ), maximum(JJ)),
+            ylimits=(minimum(μμ), maximum(μμ)))        
+    end
+
+    if FilePathOut != ""
+        # If this argument is specified, save plot.
+        savefig(FilePathOut)
+        println("Variance plot for L=$L saved on file!")
+    end
+
+    # Plot order parameter <a_i>
+    heatmap(unique(JJ), unique(μμ), orderparameters, 
+            xlabel=L"J",
+            ylabel=L"μ",
+            title=L"$\langle a_i \rangle$ ($L=%$L, i=%$i$)")
+
+    if FilePathOutA != ""
+        savefig(FilePathOutA)
+        println("Order parameter plot for L=$L saved on file!")
+    end
 end
 
 function PlotPhaseBoundaries(FilePathIn::String; 
@@ -75,7 +139,7 @@ function PlotPhaseBoundaries(FilePathIn::String;
         ΔEminus = BoundariesData[indices,5]
         
         if gap
-            plot!(JJ, ΔEplus - ΔEminus, 
+            plot!(JJ, ΔEplus + ΔEminus, 
                 xlabel=L"$J$", ylabel=L"$\Delta E_{\mathrm{gap}}$", 
                 title=L"Charge gap  as a function of $J$ ($\mu_0=%$μ0$)",
                 seriestype=:scatter,
@@ -180,8 +244,9 @@ function FitPhaseBoundaries(FilePathIn::String,
             fit_y_minus = fit_func(fit_x, fit_minus.param)
 
             # Plot the data and best-fit lines
+            round_J = round(J, digits=3)
             scatter(inv_L, ΔEplus, label=L"$\Delta E^+$ data", xlabel=L"1/L", 
-                ylabel=L"$\Delta E$", title="Fit results for J = $(J)",
+                ylabel=L"$\Delta E$", title="FSS fit results for J = $round_J",
                 legend=:topleft, markersize=2, color=MyColors[1],
                 xlimits=(0.0,maximum(inv_L)*1.1))
             plot!(fit_x, fit_y_plus, label=L"$\Delta E^+$ fit", color=MyColors[1],
@@ -303,8 +368,9 @@ function FitCorrelationFunction(FilePathIn::String,
 
     # CHANGE: PLOT & FIT PARAMETERS
     J_min = 0.25
-    r_min_fit = 2
-    r_max_fit = 12
+    L_min = 20
+    r_min_fit = 6
+    r_max_fit = 20
     fit_func(x, p) = p[1]*x.^(-p[2]/2)  # power-law
     p0 = [1.0, 1.0]                     # power-law
     # fit_func(x, p) = p[1]*x.^(-p[2]/2) .* exp.(-x./p[3]) # power-law exponential
@@ -324,7 +390,8 @@ function FitCorrelationFunction(FilePathIn::String,
     J_plot = JJ[SingleFitPlotj]
 
     # Apply the cutoff
-    JJ = JJ[ JJ.> J_min]
+    JJ = JJ[ JJ .> J_min]
+    LL = LL[ LL .> L_min]
 
     # Mastruzzo to extract array of Γ
     function ParseArray(str)
@@ -503,7 +570,7 @@ function main()
     # μ0 = 0.0
 
 
-    ModeErrorMsg = "Input error: use option --boundaries or --gamma"
+    ModeErrorMsg = "Input error: use option --heatmap, --boundaries or --gamma"
 	
 	if length(ARGS) != 1
 		# If user does not specify the user mode
@@ -511,25 +578,37 @@ function main()
 		exit()
 	else
         UserMode = ARGS[1]
-        # ---------------------
-        # --- Plot Variance ---
-        # ---------------------
-        # TODO add flag for Variance and other modes
-        #PlotVariance("../simulations/data_variance.txt", L, nmax, i)
-        #savefig("../analysis/variance.pdf")
+
+        # TODO add other --options
+
+        # --------------------
+        # --- Plot Heatmap ---
+        # --------------------
+        if UserMode=="--heatmap"
+
+            L = 12 # TODO change!!
+
+            FilePathIn = PROJECT_ROOT * "/../simulations/rectangular_sweep/L=$(L)_site=$(ceil(Int64, L/2)).txt"
+            FilePathHorizontalSweepIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60, 70, 80].txt"
+
+            FilePathOut = PROJECT_ROOT * "/../analysis/heatmap/variance_250211.pdf" # Variance plot
+            FilePathOutA = PROJECT_ROOT * "/../analysis/heatmap/a_250211.pdf"       # <a_i> plot
+
+            PlotHeatmap(L, FilePathIn; FilePathOut=FilePathOut, FilePathOutA=FilePathOutA,
+                FilePathHorizontalSweepIn=FilePathHorizontalSweepIn)
 
         # ----------------------------------
         # --- Boundary between SF and MI ---
         # ----------------------------------
-        if UserMode=="--boundaries"    
-            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60, 70].txt"
+        elseif UserMode=="--boundaries"    
+            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60, 70, 80].txt"
             PhaseBoundariesDir = PROJECT_ROOT * "/../analysis/phase_boundaries/"
             
-            FilePathPlot = PhaseBoundariesDir * "phaseboundaries_240408.pdf"
+            FilePathPlot = PhaseBoundariesDir * "phaseboundaries_250211.pdf"
             FilePathFit = PhaseBoundariesDir * "fitted_phase_boundaries.txt"
             
-            FilePathPlotOut = PhaseBoundariesDir * "phaseboundaries_240408_fit.pdf"
-            FilePathSinglePlotOut = PhaseBoundariesDir * "phaseboundaries_240408_fit_single.pdf"
+            FilePathPlotOut = PhaseBoundariesDir * "phaseboundaries_250211_fit.pdf"
+            FilePathSinglePlotOut = PhaseBoundariesDir * "phaseboundaries_250211_fit_single.pdf"
 
             PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut=FilePathPlot)
 
@@ -539,7 +618,7 @@ function main()
         # --- Correlation function Γ ---
         # ------------------------------
         elseif UserMode=="--gamma"
-            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60, 70].txt"
+            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60, 70, 80].txt"
             
             # PLOT
             FileGammaPlot = PROJECT_ROOT * "/../analysis/gamma/gamma_data_plot.pdf"

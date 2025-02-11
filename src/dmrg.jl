@@ -193,7 +193,9 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 						  verbose=false,				# Do not print at line
 						  U=1.0,						# Simplify model
 						  FixedN=false,					# Let N vary
-						  pbc=false)					# No periodic boundary conditions
+						  pbc=false,                    # No periodic boundary conditions
+                          CustomPsi0SF=false,
+                          RandomPsi0=false)					
     
     """
     Run DMRG algorithm with chosen parameters, and return results.
@@ -234,7 +236,22 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     Ntot = GetNumber(sites)
     
     # Set starting state and print observables
-    psi0 = SetStartingState(sites, N, d)
+    if RandomPsi0 == true
+        psi0 = randomMPS(sites)
+    else
+        psi0 = SetStartingState(sites, N, d)
+    end
+
+    # Uncomment below for MI vs SF psi0
+    # if CustomPsi0SF==false
+    #     psi0 = SetStartingState(sites, N, d)
+    #     println("Warning! I am using a random MPS as Psi0")
+    # else
+    #     _, Psi0SF = dmrg(H, randomMPS(sites); nsweeps, maxdim, cutoff, outputlevel=0)
+    #     psi0 = Psi0SF
+    #     println("Warning! I am using custom Psi0 for SF")
+    # end
+
     if verbose
         N0 = inner(psi0', Ntot, psi0)
         E0 = inner(psi0', H, psi0)
@@ -257,16 +274,16 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     # Calculate relevant observables in the ground state
     
     nVariance = zeros(L) 			# Variance on n_i, for all sites i
+    aAvg = zeros(L) 			    # < a_i > (possible order parameter for SF)
     if ComputeAllObservables		# Conditional: save time if not needed
-    	aAvg = zeros(L) 			# < a_i > (possible order parameter for SF)
     	nMean = zeros(L)			# Mean number of particles per site
     	LocalE = zeros(L)			# Local contribution to the energy
     end
 
     for i in 1:L
     	nVariance[i] = GetNumberVariance(psi, sites, i)
+        aAvg[i] = expect(psi, "a"; sites=i)
     	if ComputeAllObservables	# Conditional: save time if not needed
-	        aAvg[i] = expect(psi, "a"; sites=i)
     	    nMean[i] = expect(psi, "n"; sites=i)
     	    LocalE[i] = inner(psi', GetLocalH(sites, i, J, U, μ), psi)
     	end
@@ -293,7 +310,7 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     	Start = Trash+1				# Start of useful segment
     	Stop = L-Trash				# End of useful segment
     	
-    	Segment = L-2*Trash			# Segment lenght
+    	Segment = L-2*Trash			# Segment length
     	Spacings = collect(Int64, 2:2:Segment)
     	
     	# Conditional initializion (partitioned)
@@ -326,7 +343,7 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 			        ΓTmp = inner(psi', ΓOp, psi)
 			        push!(ΓTmpArray, ΓTmp)	
 			    elseif ComputeC || ComputeAllObservables
-			        COp = GetNumberCorrelator(sites, i, j)
+			        COp = GetNumberCorrelator(psi, sites, i, j)
 			        CTmp = inner(psi', COp, psi)
 			        push!(CTmpArray, CTmp)
 			    end
@@ -354,8 +371,7 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 		return E, nVariance, Γ, eΓ, C, eC
 	
 	else
-		return E, nVariance
-	
+		return E, nVariance, aAvg
 	end
 end
 
