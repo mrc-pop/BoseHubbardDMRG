@@ -8,9 +8,9 @@ using LaTeXStrings
 using Dates
 using DelimitedFiles
 
-# ---------------
-# --- Physics ---
-# ---------------
+# ------------------------------------------------------------------------------
+# --------------------------------- Physics ------------------------------------
+# ------------------------------------------------------------------------------
 
 # Full hamiltonian
 
@@ -145,9 +145,9 @@ function GetNumberVariance(psi, sites, i::Int64)
     return Ni2 - (Ni1^2)
 end
 
-# ------------
-# --- DMRG ---
-# ------------
+# ------------------------------------------------------------------------------
+# ------------------------------------ DMRG ------------------------------------ 
+# ------------------------------------------------------------------------------
 
 function SetStartingState(sites, N, d)
 
@@ -365,15 +365,19 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     end
 
 	if ComputeAllObservables
-	    return E, aAvg, nMean, nVariance, LocalE, Γ, eΓ, C, eC, psi
+	    return E, nMean, nVariance, aAvg, LocalE, Γ, eΓ, C, eC, psi
 	
 	elseif ComputeGamma || ComputeC
-		return E, nVariance, Γ, eΓ, C, eC
+		return E, nVariance, aAvg, Γ, eΓ, C, eC
 	
 	else
 		return E, nVariance, aAvg
 	end
 end
+
+# ------------------------------------------------------------------------------
+# ------------------------------------ Main ------------------------------------ 
+# ------------------------------------------------------------------------------
 
 function main()
 
@@ -400,7 +404,7 @@ function main()
     							    DMRGParameters;
     								ComputeAllObservables=true, 
     								verbose=true) 
-    E, aAvg, nMean, nVariance, LocalE, Γ, eΓ, C, eC, psi = Observables
+    E, nMean, nVariance, aAvg, LocalE, Γ, eΓ, C, eC, psi = Observables
 
     println("Results of the simulation:
 Energy of ground state: $(round.(E, digits=4))\n
