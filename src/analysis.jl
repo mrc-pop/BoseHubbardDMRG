@@ -267,10 +267,12 @@ function PlotCorrelationFunction(FilePathIn::String,
             continue
         end
 
+        J_round = round(J, digits=3)
+
         scatter!(r, Γeven,
             xlabel=L"$r$",
             ylabel=L"$\Gamma(r)$",
-            title=L"Correlation function ($J=%$J$)",
+            title=L"Correlation function ($J=%$J_round$)",
             label=L"L=%$L",
             markersize=2,
             xscale=:log10,
@@ -290,7 +292,8 @@ function FitCorrelationFunction(FilePathIn::String,
 								FilePathOut::String;
                                 SingleFitPlotPathOut="",
                                 PlotPathOut="",
-                                FSSPlotPathOut="")
+                                FSSPlotPathOut="",
+                                SingleFitPlotj::Int64)
 								
     """
     Read data from file. Then fit a power-law extracting the exponent K(J,L). 
@@ -299,10 +302,14 @@ function FitCorrelationFunction(FilePathIn::String,
     """
 
     # CHANGE: PLOT & FIT PARAMETERS
-    J_min = 0.20
+    J_min = 0.25
     r_min_fit = 2
-    r_max_fit = 10
-    
+    r_max_fit = 12
+    fit_func(x, p) = p[1]*x.^(-p[2]/2)  # power-law
+    p0 = [1.0, 1.0]                     # power-law
+    # fit_func(x, p) = p[1]*x.^(-p[2]/2) .* exp.(-x./p[3]) # power-law exponential
+    # p0 = [1.0, 1.0, 100]                                 # power-law exponential
+
     # Read the input data
     data = readdlm(FilePathIn, ';', '\n'; comments=true)
 
@@ -313,10 +320,14 @@ function FitCorrelationFunction(FilePathIn::String,
     println("Putting a cutoff of J>$J_min")
     println("Fit range restricted to $r_min_fit<=r<=$r_max_fit")
 
+    # Select which J to plot the fits
+    J_plot = JJ[SingleFitPlotj]
+
+    # Apply the cutoff
     JJ = JJ[ JJ.> J_min]
 
     # Mastruzzo to extract array of Γ
-    function ParseArray(str::String)
+    function ParseArray(str)
         return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
     end
     
@@ -326,11 +337,6 @@ function FitCorrelationFunction(FilePathIn::String,
     eCall = [ParseArray(row[10]) for row in eachrow(data)]
     
     # display(Γall)
-
-    # Define the fit function [power-law fit of Γ(r)]
-    # fit_func(x, p) = p[1] .* exp.(-x./p[2])
-    # fit_func(x, p) = p[1]*x.^(-p[2]/2) .* exp.(-x./p[3])
-    fit_func(x, p) = p[1]*x.^(-p[2]/2)
 
     K = [] # K_∞ (thermodynamic limit) as a function of j
     e_K = [] # error on K_∞
@@ -352,18 +358,21 @@ function FitCorrelationFunction(FilePathIn::String,
             # Extract the correlators {Γ(r,J,L)}_r for the selected J,L
             Γeven = Γall[filter][1] # this is an array, Γ(r even)
             # display(Γeven)
+            e_Γeven = eΓall[filter][1]
             r = collect(range(start=2, step=2, length=length(Γeven))) # r even
 
+            # Restrict to fit range
             fit_range_indices = findall(x -> x >= r_min_fit && x <= r_max_fit, r)
             r = r[fit_range_indices]
             Γeven = Γeven[fit_range_indices]
+            e_Γeven = e_Γeven[fit_range_indices]
+
             println("\nFitting J=$J, L=$L, r=$r (set by r_min_fit, r_max_fit).")
 
             # Perform the fit of Γ(r) vs r, at fixed (J,L).
             # The argument w means weights, they should equal 1/σ^2. 
-            # weights = 1.0 ./ e_Γeven.^2 # TODO estimate errors for Γeven!
-            p0 = [1.0, 1.0]
-            fit = curve_fit(fit_func, r, Γeven, p0) # w=weights 
+            weights = 1.0 ./ e_Γeven.^2
+            fit = curve_fit(fit_func, r, Γeven, p0) # (..., weights, p0)
 
             println("  Done. Best-fit parameters: ", round.(fit.param, digits=4))
 
@@ -374,7 +383,7 @@ function FitCorrelationFunction(FilePathIn::String,
             push!(e_K_FSS, e_K_JL)
             push!(chi2n_FSS, chi2n)
 
-            if J == maximum(JJ)
+            if J == J_plot
                 # Make a single plot, hopefully representative of the first
                 # series of fits. Save the results.
                 color = MyColors[l % length(MyColors)]  # color for current L
@@ -399,7 +408,8 @@ function FitCorrelationFunction(FilePathIn::String,
                 fit_y = fit_func(fit_x, fit.param)
                 plot!(fit_x, fit_y, label=false, color=color, alpha=0.7)
                 if SingleFitPlotPathOut!=""
-                    title!(L"Correlation function power-law fit ($J=%$J$)")
+                    J_round = round(J, digits=3)
+                    title!(L"Correlation function power-law fit ($J=%$J_round$)")
                     savefig(SingleFitPlotPathOut)
                 end
             end
@@ -512,7 +522,7 @@ function main()
         # --- Boundary between SF and MI ---
         # ----------------------------------
         if UserMode=="--boundaries"    
-            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60].txt"
+            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60, 70].txt"
             PhaseBoundariesDir = PROJECT_ROOT * "/../analysis/phase_boundaries/"
             
             FilePathPlot = PhaseBoundariesDir * "phaseboundaries_240408.pdf"
@@ -529,18 +539,18 @@ function main()
         # --- Correlation function Γ ---
         # ------------------------------
         elseif UserMode=="--gamma"
-            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60].txt"
+            FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/L=[10, 20, 30, 40, 50, 60, 70].txt"
             
             # PLOT
-            FileGammaPlot = PROJECT_ROOT * "/../analysis/correlations/gamma_data_plot.tex"
+            FileGammaPlot = PROJECT_ROOT * "/../analysis/gamma/gamma_data_plot.pdf"
             j = 50 # CHANGE: which J to choose for the plot
             PlotCorrelationFunction(FilePathIn, j; FilePathOut=FileGammaPlot, overwrite=false)
 
             # FIT (& PLOT)
-            PlotPathOut = PROJECT_ROOT * "/../analysis/correlations/gamma_final_plot.pdf"
-            SinglePlotPathOut = PROJECT_ROOT * "/../analysis/correlations/gamma_power_law_fit_plot.pdf"
-            FilePathFit = PROJECT_ROOT * "/../analysis/correlations/fit_correlation.txt"
-            FitCorrelationFunction(FilePathIn, FilePathFit; PlotPathOut=PlotPathOut, SingleFitPlotPathOut=SinglePlotPathOut)
+            PlotPathOut = PROJECT_ROOT * "/../analysis/gamma/gamma_final_plot.pdf"
+            SinglePlotPathOut = PROJECT_ROOT * "/../analysis/gamma/gamma_power_law_fit_plot.pdf"
+            FilePathFit = PROJECT_ROOT * "/../analysis/gamma/fit_correlation.txt"
+            FitCorrelationFunction(FilePathIn, FilePathFit; PlotPathOut=PlotPathOut, SingleFitPlotPathOut=SinglePlotPathOut, SingleFitPlotj=j)
 		else
 			error(ModeErrorMsg)
 			exit()
