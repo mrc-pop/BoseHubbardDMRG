@@ -1,15 +1,13 @@
-#/!usr/bin/julia
+#!/usr/bin/julia
 
-PROJECT_ROOT = @__DIR__ # Absloute path up to .../BoseHubbardDMRG/src
-include(PROJECT_ROOT * "/definitions/dmrg.jl")
-PROJECT_ROOT *= "/.."
+# ------------------------------- Tip finding ----------------------------------
 
-function SelectSubdomain(FilePathIn::String;
-						 gap=true,
-    				     verboseWaiting=false,
-    				     μ0=0.0)
+function FindMottTip(FilePathIn::String;
+					 gap=true,
+    				 verbose=false,
+    				 μ0=0.0)
     				   
-	println("\nPerforming linear extrapolation of gap closing point...")
+	println("Performing linear extrapolation of gap closing point...")
     				   
 	BoundariesData = readdlm(FilePathIn, ',', '\n'; comments=true)
 	JJ = BoundariesData[:,1]
@@ -42,6 +40,7 @@ function SelectSubdomain(FilePathIn::String;
 		
 		x3 = -b/a
 		
+		# TODO Change steps
 		ReducedXStep = (x2-x1)/2								# Arbitrary
 		Left = round(x3-ReducedXStep, digits=3)
 		Right = round(x3+ReducedXStep, digits=3)
@@ -63,6 +62,8 @@ function SelectSubdomain(FilePathIn::String;
 	
 	return Selections
 end
+
+# ------------------------ Selection plot for check ----------------------------
 
 function PlotSelection(FilePathIn::String,
 					   Selections::Matrix{Float64})
@@ -95,48 +96,3 @@ end
 function GetKIntercept(FilePathIn::String)
 end
 """
-
-println("\nBeta: no errors")
-Selections = SelectSubdomain(PROJECT_ROOT * "/analysis/phase_boundaries/fitted_phase_boundaries.txt"; verbose=false)
-PlotSelection(PROJECT_ROOT * "/analysis/phase_boundaries/fitted_phase_boundaries.txt", Selections)
-
-print("Should I run a rectangular simulation inside the selected region? (y/n) ")
-Waiting=true
-PerformTipSweep = readline()
-while Waiting
-	if PerformTipSweep=="y"
-		global Waiting=false
-		println("Selection accepted. Starting simulations around Mott lobe tip...")
-	elseif PerformTipSweep=="n"
-		global Waiting=false
-		println("Selection rejected. Change the setting of this program to improve selection.")
-		exit()
-	else
-		global Waiting=true
-		print("Invalid input. Please use valid input. (y/n) ")
-		global PerformTipSweep = readline()
-	end
-end
-
-display(PerformTipSweep)
-
-Left, Right, Up, Down = Selections[i,:]
-JJ = collect(range(start=Left, stop=Right, length=50))
-μμ = collect(range(start=Down, stop=Right, length=50))
-LL = [10, 20, 30, 40, 50, 60, 70]
-
-DirPathOut = PROJECT_ROOT * "/simulations/rectangular_sweep_tip"
-mkpath(DirPathOut)
-FilePathOut = DirPathOut * "/L=$LL.txt"
-
-DataFile = open(FilePathOut,"w")
-write(DataFile,"# Hubbard model DMRG. This file contains many sizes. nmax=$nmax, μ0=$μ0, nsweeps=$nsweeps, cutoff=$cutoff\n")
-write(DataFile,"# L; J; E; nVariance; C; eC [calculated $(now())]\n")
-close(DataFile)
-
-for L in LL
-	println("Starting calculation of observables for L=$L...")
-	RectangularSweep(i, L, N, nmax, JJ, μμ, DMRGParametersMI, DMRGParametersSF, FilePathIn, FilePathOut)
-end
-
-println("Done!")

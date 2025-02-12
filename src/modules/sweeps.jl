@@ -75,7 +75,8 @@ function RectangularSweep(i::Int64,
     					  DMRGParametersMI::Vector{Any},
     					  DMRGParametersSF::Vector{Any},
     					  FilePathIn::String,				# To evaluate if a given point is MI or SF
-    					  FilePathOut::String)
+    					  FilePathOut::String;
+    					  ComputeCorrelators=false)			# Save computation time if correlators are not needed
     """
     Calculate the variance of the number of particles on site i for a range of
     hopping J and chemical potential μ values. Results are saved to a file.
@@ -106,25 +107,49 @@ function RectangularSweep(i::Int64,
 			inMottLobe = false
 			
 			if (μ>=μDown && μ<=μUp)
-				inMottLobe=true
+				inMottLobe = true
 			end
 
 			println("Running DMRG for L=$L, J=$(round(J, digits=3)), μ=$(round(μ, digits=3)) (simulation ",
 			"$m/$(length(μμ)) in μ, $j/$(length(JJ)) in J, MI=$inMottLobe)")
 
-			if inMottLobe
-	            E, nVariance, aAvg = RunDMRGAlgorithm(ModelParameters,
-													  DMRGParametersMI;
-	                                            	  FixedN = false,
-													  RandomMPS = true)
-	            write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]) # MI\n")
-	        else
-	        	E, nVariance, aAvg = RunDMRGAlgorithm(ModelParameters,
-			                                          DMRGParametersSF;
-	  		                                          FixedN = false,
-													  RandomMPS = true)
-	            write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]) # SF\n")
-	        end
+			if !ComputeCorrelators
+				if inMottLobe
+			        Results = RunDMRGAlgorithm(ModelParameters,
+											   DMRGParametersMI;
+			                                   FixedN=false,
+											   RandomPsi0=false)
+					E, nVariance, aAvg = Results
+			        write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]) # MI\n")
+			    else
+			    	Results = RunDMRGAlgorithm(ModelParameters,
+					                           DMRGParametersSF;
+		  		                               FixedN=false,
+											   RandomPsi0=true)
+					E, nVariance, aAvg = Results
+			        write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]) # SF\n")
+			    end
+			else
+				if inMottLobe
+			        Results = RunDMRGAlgorithm(ModelParameters,
+											   DMRGParametersMI;
+											   ComputeGamma=true,
+							  				   ComputeC=true,
+			                                   FixedN=false,
+											   RandomPsi0=false)
+					E, nVariance, aAvg, Γ, eΓ, C, eC = Results
+			        write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]), $Γ, $eΓ, $C, $eC # MI\n")
+			    else
+			    	Results = RunDMRGAlgorithm(ModelParameters,
+					                           DMRGParametersSF;
+					                           ComputeGamma=true,
+							  				   ComputeC=true,
+		  		                               FixedN=false,
+											   RandomPsi0=true)
+					E, nVariance, aAvg, Γ, eΓ, C, eC = Results
+			        write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]) $Γ, $eΓ, $C, $eC # SF\n")
+			    end
+			end
         end
     end
 
@@ -132,6 +157,8 @@ function RectangularSweep(i::Int64,
 end
 
 # -------------------------------- Path sweep ----------------------------------
+
+# UNDER CONSTRUCTION!
 
 # function PathSweep(Path::NamedTuple(Name::String, Values::Vector{Tuple{Int64, Int64}}),
 # 				   L::Int64,

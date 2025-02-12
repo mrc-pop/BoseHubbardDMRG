@@ -194,8 +194,7 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 						  U=1.0,						# Simplify model
 						  FixedN=false,					# Let N vary
 						  pbc=false,                    # No periodic boundary conditions
-                          CustomPsi0SF=false,
-                          RandomPsi0=false)					
+                          RandomPsi0=true)				# Initialize a random state	
     
     """
     Run DMRG algorithm with chosen parameters, and return results.
@@ -236,21 +235,11 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     Ntot = GetNumber(sites)
     
     # Set starting state and print observables
-    if RandomPsi0 == true
-        psi0 = randomMPS(sites)
+    if RandomPsi0
+        psi0 = randomMPS(sites)					# Initialize random state
     else
-        psi0 = SetStartingState(sites, N, d)
+        psi0 = SetStartingState(sites, N, d)	# Initialize Mott state
     end
-
-    # Uncomment below for MI vs SF psi0
-    # if CustomPsi0SF==false
-    #     psi0 = SetStartingState(sites, N, d)
-    #     println("Warning! I am using a random MPS as Psi0")
-    # else
-    #     _, Psi0SF = dmrg(H, randomMPS(sites); nsweeps, maxdim, cutoff, outputlevel=0)
-    #     psi0 = Psi0SF
-    #     println("Warning! I am using custom Psi0 for SF")
-    # end
 
     if verbose
         N0 = inner(psi0', Ntot, psi0)
@@ -289,12 +278,7 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     	end
     end
 
-	# Calculate two-points and density-density correlators
-
-	Γ=false
-	eΓ=false
-	C=false
-	eC=false  
+	# Calculate two-points and density-density correlators  
     
     if ComputeGamma || ComputeC || ComputeAllObservables
     	
@@ -352,11 +336,14 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 		        j += 1   
 		    end
 		    
-		    # Perform average and extract statistical error
+		    # Perform average and extract statistical error (partitioned)
 		    if ComputeGamma || ComputeAllObservables
 			    Γ[Int64(r/2)] = mean(ΓTmpArray)
 			    eΓ[Int64(r/2)] = std(ΓTmpArray)
-			elseif ComputeC || ComputeAllObservables
+			end
+			
+			# Perform average and extract statistical error (partitioned)
+			if ComputeC || ComputeAllObservables
 				C[Int64(r/2)] = mean(ΓTmpArray)
 			    eC[Int64(r/2)] = std(ΓTmpArray)
 			end
@@ -364,12 +351,19 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
         end  	
     end
 
+	# Julia composition of matrices: [a b [c d]] = [a b c d]
+	
 	if ComputeAllObservables
-	    return E, nMean, nVariance, aAvg, LocalE, Γ, eΓ, C, eC, psi
+	    return E, nVariance, aAvg, Γ, eΓ, C, eC, nMean, LocalE, psi
 	
 	elseif ComputeGamma || ComputeC
-		return E, nVariance, aAvg, Γ, eΓ, C, eC
-	
+		if !ComputeGamma
+			return E, nVariance, aAvg, C, eC 
+		elseif !ComputeC
+			return E, nVariance, aAvg, Γ, eΓ 
+		else	# ComputeAllObservables: already evaluated
+			return E, nVariance, aAvg, Γ, eΓ, C, eC
+		end
 	else
 		return E, nVariance, aAvg
 	end
@@ -403,17 +397,15 @@ function main()
     Observables = RunDMRGAlgorithm([L, N, nmax, J, μ],
     							    DMRGParameters;
     								ComputeAllObservables=true, 
-    								verbose=true) 
-    E, nMean, nVariance, aAvg, LocalE, Γ, eΓ, C, eC, psi = Observables
+    								verbose=true)
+    E, nVariance, aAvg, _, _, _, _, nMean, LocalE, psi = Observables
 
     println("Results of the simulation:
-Energy of ground state: $(round.(E, digits=4))\n
-\"Local\" part of energy: $(round.(LocalE, digits=4))\n
-Mean number of particles: $(round.(nMean, digits=4))\n
-Variance number of particles: $(round.(nVariance, digits=4))\n
-Relative fluctuation: $(round.(sqrt.(nVariance)./nMean, digits=4))\n
-Two-points correlator: $(round.(Γ, digits=4))\n
-Density-density correlator: $(round.(C, digits=4))\n")
+Energy of ground state: $(round.(E, digits=4))
+\"Local\" part of energy: $(round.(LocalE, digits=4))
+Mean number of particles: $(round.(nMean, digits=4))
+Variance number of particles: $(round.(nVariance, digits=4))
+Relative fluctuation: $(round.(sqrt.(nVariance)./nMean, digits=4))")
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__ # equivalent to if __name__ == "__main__"
