@@ -2,6 +2,10 @@
 
 # Set default options for plotting
 
+using Plots; pgfplotsx()
+using ColorSchemes
+using LaTeXStrings
+
 Plots.default(
     size = (440, 320),
     bgcolor = :white,

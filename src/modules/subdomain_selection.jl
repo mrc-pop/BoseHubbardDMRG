@@ -1,5 +1,7 @@
 #!/usr/bin/julia
 
+include(PROJECT_ROOT * "/setup/graphic_setup.jl")
+
 # ------------------------------- Tip finding ----------------------------------
 
 function FindMottTip(FilePathIn::String;
@@ -9,6 +11,7 @@ function FindMottTip(FilePathIn::String;
     				   
 	println("Performing linear extrapolation of gap closing point...")
     				   
+	# Import phase boundaries 
 	BoundariesData = readdlm(FilePathIn, ',', '\n'; comments=true)
 	JJ = BoundariesData[:,1]
 	ΔEp = BoundariesData[:,2]
@@ -26,9 +29,8 @@ function FindMottTip(FilePathIn::String;
 	
 	Selections = zeros(Float64, length(CrossingIndices), 4)
 	
-	for i in 1:length(CrossingIndices)
-		Index = CrossingIndices[i]
-		
+	for (i, Index) in enumerate(CrossingIndices)
+
 		# Linear extrapolation
 		x1 = JJ[Index]
 		y1 = Gap[Index]
@@ -41,11 +43,11 @@ function FindMottTip(FilePathIn::String;
 		x3 = -b/a
 		
 		# TODO Change steps
-		ReducedXStep = (x2-x1)/2								# Arbitrary
+		ReducedXStep = 5*(x2-x1)/2								# Arbitrary
 		Left = round(x3-ReducedXStep, digits=3)
 		Right = round(x3+ReducedXStep, digits=3)
 		
-		ReducedYStep = Gap[Index-10]
+		ReducedYStep = 2*Gap[Index-10]
 		Up = round(ΔEp[Index]+ReducedYStep, digits=3)
 		Down = round(ΔEp[Index]-ReducedYStep, digits=3)	# Arbitrary
 		

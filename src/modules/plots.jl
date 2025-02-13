@@ -1,42 +1,55 @@
 #!/usr/bin/julia
 
+# # -------------------- Parse array (for reading Γ and C) -----------------------
+
+# function ParseArray(str)
+#     return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
+# end
+
 # ---------------------------------- Heatmap -----------------------------------
 
 function PlotHeatmap(L::Int64,
                       FilePath::String;
                       FilePathHorizontalSweepIn="",
                       FilePathOut="",
-                      FilePathOutA="")
+                      FilePathOutA="",
+                      FilePathOutK="")
     """
     Plot the variance of the number of particles from data saved
     in `FilePath`.
     """
     
     # Extract data coming from rectangular_sweep
-    VarianceData = readdlm(FilePath, ',', Float64, '\n'; comments=true)
+    VarianceData = readdlm(FilePath, ';', '\n'; comments=true)
 
     JJ = VarianceData[:,1]
     μμ = VarianceData[:,2]
     EE = VarianceData[:,3]
     varvar = VarianceData[:,4]
     aa = VarianceData[:,5]
+    DD = VarianceData[:,10] # Re(D)
 
     NumJ = length(unique(JJ))
     Numμ = length(unique(μμ))
 
     # Store variance and order parameter <a_i>
-    vars = zeros(Numμ, NumJ)
-    orderparameters = zeros(Numμ, NumJ)
+    Variances = zeros(Numμ, NumJ)
+    OrderParameters = zeros(Numμ, NumJ)
+    FourierTransforms = zeros(Numμ, NumJ)
+
 
     for jj in 1:NumJ
-        vars[:,jj] = varvar[ Numμ*(jj-1)+1 : Numμ*jj ]
-        orderparameters[:,jj] = aa[ Numμ*(jj-1)+1 : Numμ*jj ]
+        Variances[:,jj] = varvar[ Numμ*(jj-1)+1 : Numμ*jj ]
+        OrderParameters[:,jj] = aa[ Numμ*(jj-1)+1 : Numμ*jj ]
+        FourierTransforms[:,jj] = DD[ Numμ*(jj-1)+1 : Numμ*jj ]
     end
+
+    display(FourierTransforms)
 
     i = (ceil(Int64, L/2)) # site index
 
     # Plot variance
-    heatmap(unique(JJ), unique(μμ), vars, 
+    heatmap(unique(JJ), unique(μμ), Variances, 
             xlabel=L"J",
             ylabel=L"μ",
             title=L"Variance $\delta n_i^2$ ($L=%$L, i=%$i$)")
@@ -83,15 +96,28 @@ function PlotHeatmap(L::Int64,
         println("Variance plot for L=$L saved on file!")
     end
 
-    # Plot order parameter <a_i>
-    heatmap(unique(JJ), unique(μμ), orderparameters, 
-            xlabel=L"J",
-            ylabel=L"μ",
-            title=L"$\langle a_i \rangle$ ($L=%$L, i=%$i$)")
-
     if FilePathOutA != ""
+        # Plot order parameter <a_i>
+        heatmap(unique(JJ), unique(μμ), OrderParameters, 
+                xlabel=L"J",
+                ylabel=L"μ",
+                title=L"$\langle a_i \rangle$ ($L=%$L, i=%$i$)")
         savefig(FilePathOutA)
         println("Order parameter plot for L=$L saved on file!")
+    end
+
+    if FilePathOutK != ""
+        # Plot K extracted from D
+        KMatrix =  1 ./ (FourierTransforms .* L)
+
+        display(KMatrix)
+
+        heatmap(unique(JJ), unique(μμ), KMatrix, 
+                xlabel=L"J",
+                ylabel=L"μ",
+                title=L"$K$ extracted from $\tilde C(q \to 0)$ ($L=%$L, i=%$i$)")
+        savefig(FilePathOutK)
+        println("K from D plot for L=$L saved on file!")        
     end
 end
 

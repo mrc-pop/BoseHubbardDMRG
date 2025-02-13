@@ -4,6 +4,8 @@ PROJECT_ROOT = @__DIR__ # Absloute path up to .../BoseHubbardDMRG/src
 include(PROJECT_ROOT * "/modules/dmrg.jl")
 include(PROJECT_ROOT * "/modules/sweeps.jl")
 include(PROJECT_ROOT * "/modules/subdomain_selection.jl")
+include(PROJECT_ROOT * "/setup//graphic_setup.jl")
+
 PROJECT_ROOT *= "/.."	# Absloute path up to .../BoseHubbardDMRG/
 
 function main()
@@ -32,6 +34,10 @@ function main()
 	else
 		
 		UserMode = ARGS[1]
+
+        # ----------------------------------------------------------------------
+        # -------------------------- Horizontal sweep --------------------------
+        # ----------------------------------------------------------------------
 		if UserMode=="--horizontal"
 		
 			# TODO Import settings
@@ -58,6 +64,9 @@ function main()
 			
 			println("Done!")
 
+        # ----------------------------------------------------------------------
+        # -------------------------- Rectangular sweep -------------------------
+        # ----------------------------------------------------------------------
 		elseif UserMode=="--rectangular"
 		
 			# TODO Import settings
@@ -72,9 +81,7 @@ function main()
 			# FilePathIn =  PROJECT_ROOT * "/simulations/horizontal_sweep/L=$LL.txt"
 			FilePathIn =  PROJECT_ROOT * "/analysis/phase_boundaries/fitted_phase_boundaries.txt"
 
-			for j in 1:length(LL)
-			
-				L = LL[j]
+			for (j,L) in enumerate(LL)
 				N = NN[j]
 				i = ceil(Int64, L/2) # Site to calculate variance on
 				
@@ -87,7 +94,10 @@ function main()
 			end
 			
 			println("Done!")
-			
+
+        # ----------------------------------------------------------------------
+        # --------------------- Rectangular selection sweep --------------------
+        # ----------------------------------------------------------------------
 		elseif UserMode=="--rectangular-selection"
 			
 			println("Starting tip selection...")
@@ -96,42 +106,52 @@ function main()
 			PlotSelection(FilePathIn, Selections)
 			
 			print("Should I run a rectangular simulation inside the selected region? (y/n) ")
-			Waiting=true
 			PerformTipSweep = readline()
-			while Waiting
-				if PerformTipSweep=="y"
-					global Waiting=false
+			println("You have chosen ", PerformTipSweep)
+			while true
+				if PerformTipSweep == "y"
 					println("Selection accepted. Starting simulations around Mott lobe tip...")
-				elseif PerformTipSweep=="n"
-					global Waiting=false
+					break
+				elseif PerformTipSweep == "n"
 					println("Selection rejected. Change the setting of this program to improve selection.")
 					exit()
 				else
-					global Waiting=true
 					print("Invalid input. Please use valid input. (y/n) ")
-					global PerformTipSweep = readline()
+					PerformTipSweep = readline()
 				end
 			end
 			
-			LL = [10, 20, 30, 40, 50, 60, 70]
+			LL = [50]
 			NN = LL
-			
-			Left, Right, Up, Down = Selections[i,:]
-			JJ = collect(range(start=Left, stop=Right, length=50))
-			μμ = collect(range(start=Down, stop=Up, length=50))
+			if size(Selections, 1) > 1
+				print("There are $(size(Selections,1)) intersection points. Which one do you select? ")
+				UserTipSelection = parse(Int64, readline())
+				if UserTipSelection>0 & UserTipSelection < size(Selections,1)
+					Left, Right, Up, Down = Selections[UserTipSelection,:]
+				else
+					print("Invalid input. Please use valid input. (1, ..., $(size(Selections,1)))")
+				end
+			else
+				Left, Right, Up, Down = Selections
+			end
+
+			JJ = collect(range(start=Left, stop=Right, length=3))
+			μμ = collect(range(start=Down, stop=Up, length=3))
+
+			## TEMP RIMUOVI!! TODO TODO
+			JJ = collect(range(start=0.1, stop=0.2, length=10))
+			μμ = [0.5]
 
 			DirPathOut = PROJECT_ROOT * "/simulations/rectangular_sweep_tip"
 			mkpath(DirPathOut)
 			FilePathOut = DirPathOut * "/L=$LL.txt"
 
 			DataFile = open(FilePathOut,"w")
-			write(DataFile,"# Hubbard model DMRG. This file contains many sizes. nmax=$nmax, μ0=$μ0, nsweeps=$nsweeps, cutoff=$cutoff\n")
+			write(DataFile,"# Hubbard model DMRG. This file contains many sizes. nmax=$nmax, nsweeps=$nsweeps, cutoff=$cutoff\n")
 			write(DataFile,"# L; J; E; nVariance; C; eC [calculated $(now())]\n")
 			close(DataFile)
 
-			for j in 1:length(LL)
-				
-				L = LL[j]
+			for (j, L) in enumerate(LL)
 				N = NN[j]
 				i = ceil(Int64, L/2) # Site to calculate variance on
 				

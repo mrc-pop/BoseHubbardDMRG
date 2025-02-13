@@ -85,17 +85,24 @@ function RectangularSweep(i::Int64,
     DataFile = open(FilePathOut, "w")
     write(DataFile,"# Hubbard model DMRG. L=$L, N=$N, nmax=$nmax\n")
     write(DataFile,"# NOTE: Different DMRG settings have been used for MI and SF. Check the code.\n")
-    write(DataFile,"# J, μ, E, n_variance, <a_i> [calculated $(now()) @site  i=$i]\n")
+    
+
+    if !ComputeCorrelators
+        write(DataFile,"#J; μ; E; n_variance; <a_i> [calculated $(now()) @site  i=$i]\n")
+    elseif ComputeCorrelators
+        write(DataFile,"# J; μ; E; n_variance; <a_i>; Γ; eΓ; C; eC; Re(D); Im(D) where D=FT(C) [calculated $(now()) @site  i=$i]\n")
+    end
 
 	# Take data from fitting data of horizontal sweeps to separate MI from SF 
 	# ( use ΔE^+(∞) and ΔE^-(∞) )
 	BoundariesData = readdlm(FilePathIn, ',', Float64, '\n'; comments=true)
+    JJFitted = BoundariesData[:,1]
 
     for (j,J) in enumerate(JJ)
 		# We take the best approximating J ∈ JJ, to assess whether we are in the MI or SF phase
 
 		# Index = findall(==(J), BoundariesData[:,1]) # this would work if there is the EXACT J in the fit results
-		Index = argmin(abs.(JJ .- J)) # this always works, gives the best approximation
+		Index = argmin(abs.(JJFitted .- J)) # this always works, gives the best approximation
 		μUp = BoundariesData[Index,2][1]
 		μDown = -BoundariesData[Index,3][1]
     	
@@ -127,9 +134,9 @@ function RectangularSweep(i::Int64,
 		  		                               FixedN=false,
 											   RandomPsi0=true)
 					E, nVariance, aAvg = Results
-			        write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]) # SF\n")
+			        write(DataFile,"$J; $μ; $E; $(nVariance[i]); $(aAvg[i]) # SF\n")
 			    end
-			else
+			elseif ComputeCorrelators
 				if inMottLobe
 			        Results = RunDMRGAlgorithm(ModelParameters,
 											   DMRGParametersMI;
@@ -138,7 +145,15 @@ function RectangularSweep(i::Int64,
 			                                   FixedN=false,
 											   RandomPsi0=false)
 					E, nVariance, aAvg, Γ, eΓ, C, eC = Results
-			        write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]), $Γ, $eΓ, $C, $eC # MI\n")
+
+                    # Calculate DFT of C(r) and save it to file as well
+                    D = 0
+                    q = 2*pi/L
+                    for (r,Cr) in enumerate(C)
+                        D += Complex(-1)^(2*r/L) * Cr # Numerically smarter than using the imaginary unit
+                    end
+
+			        write(DataFile,"$J; $μ; $E; $(nVariance[i]); $(aAvg[i]); $Γ; $eΓ; $C; $eC; $(real(D)); $(imag(D)) # MI\n")
 			    else
 			    	Results = RunDMRGAlgorithm(ModelParameters,
 					                           DMRGParametersSF;
@@ -147,7 +162,15 @@ function RectangularSweep(i::Int64,
 		  		                               FixedN=false,
 											   RandomPsi0=true)
 					E, nVariance, aAvg, Γ, eΓ, C, eC = Results
-			        write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]) $Γ, $eΓ, $C, $eC # SF\n")
+
+                    # Calculate DFT of C(r) and save it to file as well
+                    D = 0
+                    q = 2*pi/L
+                    for (r,Cr) in enumerate(C)
+                        D += Complex(-1)^(2*r/L) * Cr # Numerically smarter than using the imaginary unit
+                    end
+
+			        write(DataFile,"$J; $μ; $E; $(nVariance[i]); $(aAvg[i]); $Γ; $eΓ; $C; $eC; $(real(D)); $(imag(D)) # SF\n")
 			    end
 			end
         end

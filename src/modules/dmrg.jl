@@ -2,9 +2,6 @@
 
 using ITensors, ITensorMPS
 using Statistics
-using Plots; pgfplotsx()
-using ColorSchemes
-using LaTeXStrings
 using Dates
 using DelimitedFiles
 
@@ -281,74 +278,74 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 	# Calculate two-points and density-density correlators  
     
     if ComputeGamma || ComputeC || ComputeAllObservables
+
     	
-    	"""
-    	Procedure: discard half of the lattice (the first quarter and the last);
-    	what remains is used as a domain to sweep across, collecting 
-    	symmetrically two-points and density-density correlators; these last
-    	are then avereaged; error is taken as the statistical standard 
-    	deviation.
-    	"""
-    	
-    	Trash = floor(Int64, L/4)	# How many to discard from each side?
-    	Start = Trash+1				# Start of useful segment
-    	Stop = L-Trash				# End of useful segment
-    	
-    	Segment = L-2*Trash			# Segment length
-    	Spacings = collect(Int64, 2:2:Segment)
-    	
-    	# Conditional initializion (partitioned)
-    	if ComputeGamma || ComputeAllObservables
-			Γ = zeros(Float64, length(Spacings))
-			eΓ = zeros(Float64, length(Spacings))
-    	end
-    	
+        if ComputeGamma || ComputeAllObservables
+
+            """
+            Procedure: discard half of the lattice (the first quarter and the last);
+            what remains is used as a domain to sweep across, collecting 
+            symmetrically two-points and density-density correlators; these last
+            are then avereaged; error is taken as the statistical standard 
+            deviation.
+            """
+            
+            Trash = floor(Int64, L/4)	# How many to discard from each side?
+            Start = Trash+1				# Start of useful segment
+            Stop = L-Trash				# End of useful segment
+            
+            Segment = L-2*Trash			# Segment length
+            Spacings = collect(Int64, 2:2:Segment)
+
+
+            Γ = zeros(Float64, length(Spacings))
+            eΓ = zeros(Float64, length(Spacings))
+            
+            # (Center) symmetric sweep for Γ
+            for r in Spacings
+
+                ΓTmpArray = [] # stores the different Γ(r)
+
+                i = Start
+                j = Start+r-1
+
+                while j<=Stop
+                    ΓOp = GetTwoPointCorrelator(sites, i, j)
+                    ΓTmp = inner(psi', ΓOp, psi)
+                    push!(ΓTmpArray, ΓTmp)	
+
+                    i += 1
+                    j += 1   
+                end
+
+                Γ[Int64(r/2)] = mean(ΓTmpArray)
+                eΓ[Int64(r/2)] = std(ΓTmpArray)
+            end
+        end
+
     	# Conditional initializion (partitioned)
     	if ComputeC || ComputeAllObservables
-			C = zeros(Float64, length(Spacings))
-			eC = zeros(Float64, length(Spacings))
-    	end
-    	
-    	# (Center) symmetric sweep
-        for r in Spacings
-        
-        	if ComputeGamma || ComputeAllObservables
-				ΓTmpArray = []
-			elseif ComputeC || ComputeAllObservables
-				CTmpArray = []
-			end
-        	
-        	i = Start
-        	j = Start+r-1
-        	while j<=Stop
 
-        		if ComputeGamma || ComputeAllObservables
-			        ΓOp = GetTwoPointCorrelator(sites, i, j)
-			        ΓTmp = inner(psi', ΓOp, psi)
-			        push!(ΓTmpArray, ΓTmp)	
-			    elseif ComputeC || ComputeAllObservables
-			        COp = GetNumberCorrelator(psi, sites, i, j)
-			        CTmp = inner(psi', COp, psi)
-			        push!(CTmpArray, CTmp)
-			    end
-			    
-		        i += 1
-		        j += 1   
-		    end
-		    
-		    # Perform average and extract statistical error (partitioned)
-		    if ComputeGamma || ComputeAllObservables
-			    Γ[Int64(r/2)] = mean(ΓTmpArray)
-			    eΓ[Int64(r/2)] = std(ΓTmpArray)
-			end
-			
-			# Perform average and extract statistical error (partitioned)
-			if ComputeC || ComputeAllObservables
-				C[Int64(r/2)] = mean(ΓTmpArray)
-			    eC[Int64(r/2)] = std(ΓTmpArray)
-			end
-        
-        end  	
+			C = zeros(Float64, L-1)
+			eC = zeros(Float64, L-1)
+
+            CTmpArray = [] # Stores C(r) for the different sites
+
+            for r in 1:(L-1)
+                i = 1
+                j = i + r
+
+                while j <= L
+                    CTmp = GetNumberCorrelator(psi, sites, i, j)
+                    push!(CTmpArray, CTmp)
+                    i += 1
+                    j += 1
+                end
+
+                C[r] = mean(CTmpArray)
+                eC[r] = std(CTmpArray)
+            end
+        end
     end
 
 	# Julia composition of matrices: [a b [c d]] = [a b c d]
