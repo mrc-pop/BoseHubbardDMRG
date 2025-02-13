@@ -45,23 +45,32 @@ function main()
 			# Horizontal sweep
 	    	# TODO Import model parameters from user input
 	    	JJ = collect(range(start=0.0, stop=0.35, length=50))
-	    	LL = [50, 60, 70] # [10, 20, 30, 40] 
-			μ0 = 0.0
+	    	LL = [10, 20, 30, 40, 50, 60, 70] 
+			μ0μ0 = [0.2, 0.4] # [0.6, 0.8]
 	    	
 	    	DirPathOut = PROJECT_ROOT * "/simulations/horizontal_sweep"
     		mkpath(DirPathOut)
-			FilePathOut = DirPathOut * "/L=$LL.txt"
 	    	
-	    	DataFile = open(FilePathOut,"w")
-			write(DataFile,"# Hubbard model DMRG. This file contains many sizes. nmax=$nmax, μ0=$μ0, nsweeps=$nsweeps, cutoff=$cutoff\n")
-			write(DataFile,"# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ; eΓ; C; eC [calculated $(now())]\n")
-			close(DataFile)
+	    	for μ0 in μ0μ0
+	    		
+	    		FilePathOut = DirPathOut * "/μ0=$(μ0)_L=$(LL).txt"
 	    	
-	    	for L in LL
-        		println("Starting calculation of observables for L=$L...")
-				HorizontalSweep(L, nmax, JJ, DMRGParametersSF, FilePathOut; μ0=μ0)
+				DataFile = open(FilePathOut,"w")
+				write(DataFile,"# Hubbard model DMRG. This file contains many sizes. nmax=$nmax, μ0=$μ0, nsweeps=$nsweeps, cutoff=$cutoff\n")
+				write(DataFile,"# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ; eΓ; C; eC [calculated $(now())]\n")
+				close(DataFile)
+	    	
+		    	for L in LL
+    	    		println("Starting calculation of observables for L=$L...")
+					HorizontalSweep(L, nmax, JJ, DMRGParametersSF, FilePathOut; μ0=μ0)
+				end
+				
+				DataFile = open(FilePathOut,"a")
+				write(DataFile,"# [finished at $(now())]\n")
+				close(DataFile)
+				
 			end
-			
+					
 			println("Done!")
 
         # ----------------------------------------------------------------------
