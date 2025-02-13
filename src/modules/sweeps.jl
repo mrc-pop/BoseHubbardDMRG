@@ -30,15 +30,18 @@ function HorizontalSweep(L::Int64,
             # Create tasks for each DMRG call
             task1 = @spawn RunDMRGAlgorithm([L, L-1, nmax, J, μ0], 
                                              DMRGParameters; 
-                                             FixedN = true)
+                                             FixedN=true,
+                                             RandomPsi0=false)
             task2 = @spawn RunDMRGAlgorithm([L, L, nmax, J, μ0], 
                                              DMRGParameters; 
                                              ComputeGamma=true,
-                                             ComputeC = true,
-                                             FixedN = true)
+                                             ComputeC=true,
+                                             FixedN=true,
+                                             RandomPsi0=false)
             task3 = @spawn RunDMRGAlgorithm([L, L+1, nmax, J, μ0], 
                                              DMRGParameters; 
-                                             FixedN = true)
+                                             FixedN=true,
+                                             RandomPsi0=false)
 
             # Wait for all tasks to complete and collect results
             E1, _ = fetch(task1)

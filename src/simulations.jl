@@ -62,7 +62,7 @@ function main()
 	    	
 		    	for L in LL
     	    		println("Starting calculation of observables for L=$L...")
-					HorizontalSweep(L, nmax, JJ, DMRGParametersSF, FilePathOut; μ0=μ0)
+					HorizontalSweep(L, nmax, JJ, DMRGParametersSF, FilePathOut; μ0=μ0, )
 				end
 				
 				DataFile = open(FilePathOut,"a")
