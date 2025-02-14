@@ -9,18 +9,18 @@
 # ---------------------------------- Heatmap -----------------------------------
 
 function PlotHeatmap(L::Int64,
-                      FilePath::String;
-                      FilePathHorizontalSweepIn="",
-                      FilePathOut="",
-                      FilePathOutA="",
-                      FilePathOutK="")
+                     FilePathIn::String;
+                     PhaseBoundariesFilePath="",
+                     VarianceFilePathOut="",
+                     AFilePathOut="",
+                     KFilePathOut="")
     """
     Plot the variance of the number of particles from data saved
-    in `FilePath`.
+    in `FilePathIn`.
     """
     
     # Extract data coming from rectangular_sweep
-    VarianceData = readdlm(FilePath, ';', '\n'; comments=true)
+    VarianceData = readdlm(FilePathIn, ';', '\n'; comments=true)
 
     JJ = VarianceData[:,1]
     μμ = VarianceData[:,2]
@@ -55,10 +55,10 @@ function PlotHeatmap(L::Int64,
             title=L"Variance $\delta n_i^2$ ($L=%$L, i=%$i$)")
     ylabel!(L"μ")
 
-    if FilePathHorizontalSweepIn != ""
+    if PhaseBoundariesFilePath != ""
         # If this argument is specified, plot the finite-size
         # phase boundaries, for the closest L available
-        BoundariesData = readdlm(FilePathHorizontalSweepIn, ';', '\n'; comments=true)
+        BoundariesData = readdlm(PhaseBoundariesFilePath, ';', '\n'; comments=true)
         LL = unique(BoundariesData[:, 1])
 
         L_PB_index = argmin(abs.(LL .- L)) # best approximation of L
@@ -90,23 +90,23 @@ function PlotHeatmap(L::Int64,
             ylimits=(minimum(μμ), maximum(μμ)))        
     end
 
-    if FilePathOut != ""
+    if VarianceFilePathOut != ""
         # If this argument is specified, save plot.
-        savefig(FilePathOut)
+        savefig(VarianceFilePathOut)
         println("Variance plot for L=$L saved on file!")
     end
 
-    if FilePathOutA != ""
+    if AFilePathOut != ""
         # Plot order parameter <a_i>
         heatmap(unique(JJ), unique(μμ), OrderParameters, 
                 xlabel=L"J",
                 ylabel=L"μ",
                 title=L"$\langle a_i \rangle$ ($L=%$L, i=%$i$)")
-        savefig(FilePathOutA)
+        savefig(AFilePathOut)
         println("Order parameter plot for L=$L saved on file!")
     end
 
-    if FilePathOutK != ""
+    if KFilePathOut != ""
         # Plot K extracted from D
         KMatrix =  1 ./ (FourierTransforms .* L)
 
@@ -116,7 +116,7 @@ function PlotHeatmap(L::Int64,
                 xlabel=L"J",
                 ylabel=L"μ",
                 title=L"$K$ extracted from $\tilde C(q \to 0)$ ($L=%$L, i=%$i$)")
-        savefig(FilePathOutK)
+        savefig(KFilePathOut)
         println("K from D plot for L=$L saved on file!")        
     end
 end

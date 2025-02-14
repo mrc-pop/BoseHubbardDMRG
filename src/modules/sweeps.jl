@@ -73,8 +73,8 @@ function RectangularSweep(i::Int64,
     					  L::Int64,
     					  N::Int64,
     					  nmax::Int64,
-    					  JJ::Vector{Float64},				# Horizontal sweep
-						  μμ::Vector{Float64},				# Vertical sweep
+    					  JJ::Vector{Float64},				# Horizontal domain
+						  μμ::Vector{Float64},				# Vertical domain
     					  DMRGParametersMI::Vector{Any},
     					  DMRGParametersSF::Vector{Any},
     					  FilePathIn::String,				# To evaluate if a given point is MI or SF
@@ -153,7 +153,7 @@ function RectangularSweep(i::Int64,
                     D = 0
                     q = 2*pi/L
                     for (r,Cr) in enumerate(C)
-                        D += Complex(-1)^(2*r/L) * Cr # Numerically smarter than using the imaginary unit
+                        D += Complex(-1)^(2*r/L) * Cr # Numerically better than using the imaginary unit
                     end
 
 			        write(DataFile,"$J; $μ; $E; $(nVariance[i]); $(aAvg[i]); $Γ; $eΓ; $C; $eC; $(real(D)); $(imag(D)) # MI\n")

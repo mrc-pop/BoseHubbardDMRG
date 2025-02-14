@@ -1,31 +1,31 @@
 #!/usr/bin/julia
 
 PROJECT_ROOT = @__DIR__ # Absloute path up to .../BoseHubbardDMRG/src
+
+# Include modules
 include(PROJECT_ROOT * "/modules/dmrg.jl")
 include(PROJECT_ROOT * "/modules/sweeps.jl")
 include(PROJECT_ROOT * "/modules/subdomain_selection.jl")
-include(PROJECT_ROOT * "/setup//graphic_setup.jl")
 
+# Include setup
+include(PROJECT_ROOT * "/setup/graphic_setup.jl")
+include(PROJECT_ROOT * "/setup/simulations_setup.jl")
+
+# Move back
 PROJECT_ROOT *= "/.."	# Absloute path up to .../BoseHubbardDMRG/
 
 function main()
 
-    # TODO Remove 11-23, import from simulations/setup
-    nmax = 4
-
-    # Mott Insulator DMRG parameters
-    nsweeps = 10
-    maxlinkdim = [10,50,75,200,500]		# TODO Change with optimal values
-    cutoff = [1E-8]					    # TODO Change with optimal values
-    DMRGParametersMI = [nsweeps, maxlinkdim, cutoff]
-
-	# Superfluid phase DMRG paramters
-	nsweeps = 20
-	maxlinkdim = [10,50,75,200,500]		# TODO Change with optimal values
-	cutoff = [1E-8]					    # TODO Change with optimal values
-	DMRGParametersSF = [nsweeps, maxlinkdim, cutoff]
+	"""
+	Note: the main() functions at this level are the only functions in the whole
+	project referring to externally defined global variables. All simulations
+	variables have been defined in ./setup/simulations_setup.jl and are here
+	referred to with their names. Check the setup file to modify the
+	definitions.
+	"""
     
-	ModeErrorMsg = "Input error: use option --horizontal, --rectangular or --rectangular-selection"
+	ModeErrorMsg = "Input error: use option --horizontal, --rectangular or " *
+				   "--rectangular-selection"
 	
 	if length(ARGS) != 1
 		# If user does not specify the user mode
@@ -35,18 +35,14 @@ function main()
 		
 		UserMode = ARGS[1]
 
-        # ----------------------------------------------------------------------
         # -------------------------- Horizontal sweep --------------------------
-        # ----------------------------------------------------------------------
-		if UserMode=="--horizontal"
-		
-			# TODO Import settings
+        
+        if UserMode=="--horizontal"
 
-			# Horizontal sweep
-	    	# TODO Import model parameters from user input
-	    	JJ = collect(range(start=0.0, stop=0.35, length=50))
-	    	LL = [10, 20, 30, 40, 50, 60, 70] 
-			μ0μ0 = [0.2, 0.4] # [0.6, 0.8]
+			# Horizontal sweeps
+			LL = HorizontalLL				# Imported from setup
+	    	JJ = HorizontalJJ				# Imported from setup
+	    	μ0μ0 = Horizontalμμ				# Imported from setup
 	    	
 	    	DirPathOut = PROJECT_ROOT * "/simulations/horizontal_sweep"
     		mkpath(DirPathOut)
@@ -62,7 +58,9 @@ function main()
 	    	
 		    	for L in LL
     	    		println("Starting calculation of observables for L=$L...")
-					HorizontalSweep(L, nmax, JJ, DMRGParametersSF, FilePathOut; μ0=μ0, )
+    	    		
+    	    		# Note: here we use superfluid DMRG parameters everywhere
+					HorizontalSweep(L, nmax, JJ, DMRGParametersSF, FilePathOut; μ0=μ0,)
 				end
 				
 				DataFile = open(FilePathOut,"a")
@@ -73,18 +71,16 @@ function main()
 					
 			println("Done!")
 
-        # ----------------------------------------------------------------------
         # -------------------------- Rectangular sweep -------------------------
-        # ----------------------------------------------------------------------
+        
 		elseif UserMode=="--rectangular"
 		
-			# TODO Import settings
+			# Rectangular sweeps
+	    	JJ = RectangularJJ				# Imported from setup
+	    	LL = RectangularLL				# Imported from setup
+	    	μμ = Rectangularμμ				# Imported from setup
 
-			# Rectangular sweep
-		    LL = [12] # [10, 20, 30, 40, 50, 60, 70]
-			NN = LL
-		    JJ = [J for J in range(start=0.0, stop=0.35, length=20)]		# TODO Change, exclude J=0
-		    μμ = [μ for μ in range(start=0.1, stop=1.0, length=20)]			# TODO Change
+			NN = LL							# Unitary filling
 
 			# Uncomment here to use L-wise phase boundaries
 			# FilePathIn =  PROJECT_ROOT * "/simulations/horizontal_sweep/L=$LL.txt"
@@ -100,6 +96,10 @@ function main()
 				
 				println("Starting calculation of observables for L=$L...")
 				RectangularSweep(i, L, N, nmax, JJ, μμ, DMRGParametersMI, DMRGParametersSF, FilePathIn, FilePathOut)
+				
+				DataFile = open(FilePathOut,"a")
+				write(DataFile,"# [finished at $(now())]\n")
+				close(DataFile)
 			end
 			
 			println("Done!")
@@ -108,6 +108,11 @@ function main()
         # --------------------- Rectangular selection sweep --------------------
         # ----------------------------------------------------------------------
 		elseif UserMode=="--rectangular-selection"
+		
+			# Rectangular selection sweep
+			LL = RectangularSelectionLL		# Imported from setup
+			
+			NN = LL							# Unitary filling
 			
 			println("Starting tip selection...")
 			FilePathIn = PROJECT_ROOT * "/analysis/phase_boundaries/fitted_phase_boundaries.txt"
@@ -130,8 +135,6 @@ function main()
 				end
 			end
 			
-			LL = [50]
-			NN = LL
 			if size(Selections, 1) > 1
 				print("There are $(size(Selections,1)) intersection points. Which one do you select? ")
 				UserTipSelection = parse(Int64, readline())
@@ -144,12 +147,8 @@ function main()
 				Left, Right, Up, Down = Selections
 			end
 
-			JJ = collect(range(start=Left, stop=Right, length=3))
-			μμ = collect(range(start=Down, stop=Up, length=3))
-
-			## TEMP RIMUOVI!! TODO TODO
-			JJ = collect(range(start=0.1, stop=0.2, length=10))
-			μμ = [0.5]
+			JJ = collect(range(start=Left, stop=Right, length=Resolution["Medium"]))
+			μμ = collect(range(start=Down, stop=Up, length=Resolution["Medium"]))
 
 			DirPathOut = PROJECT_ROOT * "/simulations/rectangular_sweep_tip"
 			mkpath(DirPathOut)
@@ -170,6 +169,10 @@ function main()
 				
 				println("Starting calculation of observables for L=$L...")
 				RectangularSweep(i, L, N, nmax, JJ, μμ, DMRGParametersMI, DMRGParametersSF, FilePathIn, FilePathOut; ComputeCorrelators=true)
+				
+				DataFile = open(FilePathOut,"a")
+				write(DataFile,"# [finished at $(now())]\n")
+				close(DataFile)
 			end
 
 			println("Done!")
