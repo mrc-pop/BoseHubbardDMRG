@@ -65,34 +65,7 @@ function FindMottTip(FilePathIn::String;
 	return Selections
 end
 
-# ------------------------ Selection plot for check ----------------------------
-
-function PlotSelection(FilePathIn::String,
-					   Selections::Matrix{Float64})
-	
-	BoundariesData = readdlm(FilePathIn, ',', '\n'; comments=true)
-	JJ = BoundariesData[:,1]
-	ΔEp = BoundariesData[:,2]
-	ΔEm = BoundariesData[:,3]
-	
-	plot()
-    plot!(JJ,
-          [ΔEp, -ΔEm],
-          label=[L"\mu_c^+ \, (L \rightarrow \infty)" L"\mu_c^- \, (L \rightarrow \infty)"], 
-          xlabel=L"J", ylabel=L"$\mu$", 
-          title="Fitted phase boundaries",
-          alpha=1.0)
-     
-    rectangle(l, r, u, d) = Shape(l .+ [0,r-l,r-l,0], d .+ [0,0,u-d,u-d])
-    for i in 1:size(Selections,1)
-    	Left, Right, Up, Down = Selections[i,:] 
-    	plot!(rectangle(Left,Right,Up,Down),
-    		  label="Selection",
-    		  linewidth=0,
-    		  opacity=0.2)
-	end
-	gui()		# .pdf file saved on /tmp, erased on boot
-end
+# ----------------------------- 1/2 K crossing ---------------------------------
 
 """
 function GetKIntercept(FilePathIn::String)

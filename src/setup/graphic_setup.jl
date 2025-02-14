@@ -6,6 +6,9 @@ using Plots; pgfplotsx()
 using ColorSchemes
 using LaTeXStrings
 
+# Get color scheme
+MyColors = ColorSchemes.tab10
+
 Plots.default(
     size = (440, 320),
     bgcolor = :white,

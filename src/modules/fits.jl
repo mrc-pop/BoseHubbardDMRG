@@ -121,14 +121,192 @@ function FitPhaseBoundaries(FilePathIn::String,
     end
 end
 
+# ------------------------------------------------------------------------------
 # --------------------------- Correlation functions ----------------------------
+# ------------------------------------------------------------------------------
 
+"""
+Fit Gamma(r) vs r as a power law. 
+If ThreeParameterFit=true, fit a three-parameter exponential and power law
+function instead.
+If rMin and rMax are specified, the fit range is reduced.
+
+Input:
+    - Γeven: array of Γ(r), r even, r≤L/2
+    - e_Γeven: array of errors
+"""
+function FitPowerLawGamma(Γeven::Array{Float64},
+                          e_Γeven::Array{Float64};
+                          rMin=1,
+                          rMax=100,
+                          ThreeParameterFit=false)
+
+    ThreeParamsFunction(x, p) = p[1]*x.^(-p[2]/2) .* exp.(-x./p[3]) # power-law * exp
+    TwoParamsFunction(x, p) = p[1]*x.^(-p[2]/2)  # power-law
+
+    # Define fit funcion and p0
+    if ThreeParameterFit
+        p0 = [1.0, 1.0, 100]
+        fit_func = ThreeParamsFunction
+    else
+        p0 = [1.0, 1.0]
+        fit_func = TwoParamsFunction
+    end
+
+    # Define variable r
+    r = collect(range(start=2, step=2, length=length(Γeven))) # r even
+
+    # Restrict to fit range
+    FitRangeIndices = findall(x -> x >= rMin && x <= rMax, r)
+    r = r[FitRangeIndices]
+    Γeven = Γeven[FitRangeIndices]
+    e_Γeven = e_Γeven[FitRangeIndices]
+
+    # Perform the fit.
+    # The argument w means weights, they should equal 1/σ^2. 
+    Weights = 1.0 ./ e_Γeven.^2
+    Fit = curve_fit(fit_func, r, Γeven, Weights, p0)
+    
+    # Extract the best-fit parameters
+    K = Fit.param[2]
+    e_K = stderror(Fit)[2]
+    chi2n = sum(Fit.resid.^2) / (length(r) - length(p0))
+
+    if ThreeParameterFit
+        ξ = Fit.param[3]
+        e_ξ = stderror(Fit)[3]
+        Results = (K, e_K, chi2n, ξ, e_ξ)
+    else
+        Results = (K, e_K, chi2n)
+    end
+    
+    return Results
+end
+
+
+"""
+Fit K vs L (at fixed J) in order to extract K_∞.
+Outputs (K_∞, e_K_∞, chi2n).
+"""
+function FitFiniteSizeScalingK(LL::Array{Int64},
+                               KK::Array{Float64},
+                               e_KK::Array{Float64})
+        
+        # Define the fit function
+        fit_func_fss(x, p) = p[1] * x .+ p[2]
+        p0 = [-1.0, minimum(KK)]
+
+        # The fit is linear in 1/L
+        inv_LL = 1 ./ LL
+
+        Weights = 1.0 ./ e_KK.^2
+        Fit = curve_fit(fit_func_fss, inv_LL, KK, Weights, p0)
+
+        K_∞ = Fit.param[2]
+        e_K_∞ = stderror(Fit)[2]
+        chi2n = sum(Fit.resid.^2)/(length(LL)-2)
+
+        Results = (K_∞, e_K_∞, chi2n)
+
+    return Results
+end
+
+"""
+Perform fits on Γ(r) vs r, varying r_min and r_max. Extrapolate K_∞ as a function
+of J, and save it on file.
+"""
+function FitRoutineGamma(FilePathIn, 
+                         FilePathOut;
+                         FitRange=10,
+                         rMins=[2,4,6,8],
+                         JMin = 0.0,
+                         LMin = 10)
+
+    # Read the input data
+    HorizontalData = readdlm(FilePathIn, ';', '\n'; comments=true)
+
+    # Extract unique J, L values
+    LL = Int64.(unique(HorizontalData[:, 1]))
+
+    JJ = unique(HorizontalData[:, 2])
+
+    # Select the couplings and sizes on which to perform the fits
+    JJ = JJ[ JJ .>= JMin]
+    LL = LL[ LL .>= LMin]
+
+    # Mastruzzo to extract array of Γ
+    function ParseArray(str)
+        return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
+    end
+    Γall = [ParseArray(row[7]) for row in eachrow(HorizontalData)]
+    eΓall = [ParseArray(row[8]) for row in eachrow(HorizontalData)]
+
+    # Open output file
+    DataFile = open(FilePathOut, "w")
+    write(DataFile,"# Fit results on Γ. Minimum size considered: LMin = $LMin.\n")
+    write(DataFile,"# J, rMin, rMax, K_∞, e_K_∞, chi2n\n")
+
+    # Perform the fits and save the results
+    for J in JJ
+        println("Making all the fits for J=$J...")
+        for rMin in rMins
+            rMax = rMin + FitRange
+
+            KK_J = zeros(Float64, length(LL))
+            e_KK_J = zeros(Float64, length(LL))
+
+            for (l,L) in enumerate(LL)
+                # Select data for current (J,L)
+                filter = (HorizontalData[:, 2] .== J) .& (HorizontalData[:, 1] .== L)
+                Γeven = Γall[filter][1]
+                e_Γeven = eΓall[filter][1]
+
+                # Remove last Γ because error is NaN. TODO: solve 
+                Γeven = Γeven[1:end-1]
+                e_Γeven = e_Γeven[1:end-1]
+
+                """
+                println("Fitting Γ as a power-law for J=$(round(J,digits=3)), L=$L, rMin=$rMin, rMax=$rMax...")
+                """
+
+                # Perform the power law fit on Γ for the current (J,L)
+                K_JL, e_K_JL, chi2n = FitPowerLawGamma(Γeven, e_Γeven; rMin, rMax, ThreeParameterFit=false)
+               
+                # Save on the arrays
+                KK_J[l] = K_JL
+                e_KK_J[l] = e_K_JL
+                
+                """
+                println("   Best-fit: K=$(round(K_JL, digits=4)) +/- $(round(e_K_JL, digits=4))\n")
+                """
+            end
+
+            # Perform the FSS fit on K for the current J
+            K_∞, e_K_∞, chi2n = FitFiniteSizeScalingK(LL, KK_J, e_KK_J)
+
+            # Save the results
+            write(DataFile,"$J, $rMin, $rMax, $K_∞, $e_K_∞, $chi2n\n")
+        end
+        println("   Done! Results saved on file.\n")
+    end
+
+    close(DataFile)
+end
+
+"""
+Old function which did it all
+"""
 function FitCorrelationFunction(FilePathIn::String,
 								FilePathOut::String;
+                                rMinFit=2,
+                                rMaxFit=100,
+                                JMin=0.0,
+                                LMin=0,
                                 SingleFitPlotPathOut="",
                                 PlotPathOut="",
                                 FSSPlotPathOut="",
-                                SingleFitPlotj::Int64)
+                                SingleFitPlotj::Int64,
+                                ThreeParameterFit=false)
 								
     """
     Read data from file. Then fit a power-law extracting the exponent K(J,L). 
@@ -139,12 +317,14 @@ function FitCorrelationFunction(FilePathIn::String,
     # CHANGE: PLOT & FIT PARAMETERS
     J_min = 0.25
     L_min = 20
-    r_min_fit = 6
-    r_max_fit = 20
-    fit_func(x, p) = p[1]*x.^(-p[2]/2)  # power-law
-    p0 = [1.0, 1.0]                     # power-law
-    # fit_func(x, p) = p[1]*x.^(-p[2]/2) .* exp.(-x./p[3]) # power-law exponential
-    # p0 = [1.0, 1.0, 100]                                 # power-law exponential
+
+    #if ThreeParameterFit
+    #    fit_func(x, p) = p[1]*x.^(-p[2]/2) .* exp.(-x./p[3]) # power-law exponential
+    #    p0 = [1.0, 1.0, 100]                                 # power-law exponential
+    #else
+        fit_func(x, p) = p[1]*x.^(-p[2]/2)  # power-law
+        p0 = [1.0, 1.0]                     # power-law
+    #end
 
     # Read the input data
     data = readdlm(FilePathIn, ';', '\n'; comments=true)
@@ -154,7 +334,7 @@ function FitCorrelationFunction(FilePathIn::String,
     LL = unique(data[:, 1])
 
     println("Putting a cutoff of J>$J_min")
-    println("Fit range restricted to $r_min_fit<=r<=$r_max_fit")
+    println("Fit range restricted to $rMinFit<=r<=$rMaxFit")
 
     # Select which J to plot the fits
     J_plot = JJ[SingleFitPlotj]
@@ -199,12 +379,12 @@ function FitCorrelationFunction(FilePathIn::String,
             r = collect(range(start=2, step=2, length=length(Γeven))) # r even
 
             # Restrict to fit range
-            fit_range_indices = findall(x -> x >= r_min_fit && x <= r_max_fit, r)
+            fit_range_indices = findall(x -> x >= rMinFit && x <= rMaxFit, r)
             r = r[fit_range_indices]
             Γeven = Γeven[fit_range_indices]
             e_Γeven = e_Γeven[fit_range_indices]
 
-            println("\nFitting J=$J, L=$L, r=$r (set by r_min_fit, r_max_fit).")
+            println("\nFitting J=$J, L=$L, r=$r (set by rMinFit, rMaxFit).")
 
             # Perform the fit of Γ(r) vs r, at fixed (J,L).
             # The argument w means weights, they should equal 1/σ^2. 
@@ -297,7 +477,7 @@ function FitCorrelationFunction(FilePathIn::String,
         println("Note: number of sizes is $(length(LL)). Skipping FSS fit.")
 
         scatter(JJ, K, xlabel=L"$J$", ylabel=L"$K$",
-            title=L"Power-law decay of $\Gamma(r)$ ($%$r_min_fit \le r \le %$r_max_fit$)",
+            title=L"Power-law decay of $\Gamma(r)$ ($%$rMinFit \le r \le %$rMaxFit$)",
             markersize=2,
             label="Data for L=$L")
         plot!(JJ, 0.5*ones(length(JJ)), label=L"$K_\mathrm{th} = 1/2$")
@@ -319,7 +499,7 @@ function FitCorrelationFunction(FilePathIn::String,
 
         # Plot the results (K_∞ vs J)
         scatter(JJ, K, xlabel=L"$J$", ylabel=L"$K_\infty$", yerr=e_K, 
-            title=L"Power-law decay of $\Gamma(r)$ ($%$r_min_fit \le r \le %$r_max_fit$)",
+            title=L"Power-law decay of $\Gamma(r)$ ($%$rMinFit \le r \le %$rMaxFit$)",
             markersize=2,
             label="Fitted data")
         plot!(JJ, 0.5*ones(length(JJ)), label=L"$K_\mathrm{th} = 1/2$")
@@ -328,4 +508,3 @@ function FitCorrelationFunction(FilePathIn::String,
         end     
     end
 end
-

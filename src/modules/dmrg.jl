@@ -142,17 +142,38 @@ function GetNumberVariance(psi, sites, i::Int64)
     return Ni2 - (Ni1^2)
 end
 
+# Von Neumann entropy
+
+function GetVonNeumannEntropy(psi::MPS, sites, i::Int64)
+    """
+    Calculate Von Neumann entropy of the bipartition `1, ..., i` and `i+1, ..., L`,
+    tracing `psi` on all other sites,
+    """
+    # Perform SVD to all states except i, to prepare for calculating a local observable (end of Lect 4 page 4)
+    orthogonalize!(psi, i)
+
+    # First argument: the tensor on which to perform the SVD, i.e. psi[i]
+    # Second argument: the indices on which to perform the SVD, i.e. linkind(psi, i-1) and sites[i] (left link and vertical link)
+    _, S = svd(psi[i], (linkind(psi, i-1), sites[i]))
+
+    # S is the diagonal matrix containing the singular values
+    SvN = 0.0 # von Neumann entropy
+    for n in 1:dim(S, 1)
+      p = S[n,n]^2
+      SvN -= p * log(p)
+    end
+    return SvN
+end
+
 # ------------------------------------------------------------------------------
 # ------------------------------------ DMRG ------------------------------------ 
 # ------------------------------------------------------------------------------
 
 function SetStartingState(sites, N, d)
-
     """
     Create an initial MPS with `N` particles and local Hilbert space dimension
     `d` on the given sites.
     """
-
     L = length(sites)
     NumFullSites = floor(Int64, N/(d-1))
     k = NumFullSites + 1

@@ -128,7 +128,11 @@ function PlotPhaseBoundaries(FilePathIn::String;
     						 gap=false,
     						 overwrite=true, 
     						 CustomLL=[],
-    						 μ0=0.0)
+    						 μ0=0.0,
+    						 HideDataPoints=false,
+    						 DrawMottLobe=false,
+    						 MottLobeFilePath=PROJECT_ROOT * "/analysis/phase_boundaries/fitted_phase_boundaries.txt",
+    						 DrawHorizontalSweeps=false)
     
     """
     Plot the phase boundaries between the Mott Insulator (MI) and Superfluid 
@@ -139,7 +143,9 @@ function PlotPhaseBoundaries(FilePathIn::String;
     """
     
     BoundariesData = readdlm(FilePathIn, ';', '\n'; comments=true)
-
+    
+    # gr(legend_background_color=RGBA{Float64}(1, 1, 1, 0.8))
+    gr()
     if overwrite
         plot()
     end
@@ -151,37 +157,92 @@ function PlotPhaseBoundaries(FilePathIn::String;
         LL = CustomLL
     end
 
-    # Get color scheme
-    MyColors = ColorSchemes.tab10
-
-    for (l, L) in enumerate(LL)
-        indices = (BoundariesData[:, 1] .== L)
-        JJ = BoundariesData[indices,2]
-        ΔEplus = BoundariesData[indices,4]
-        ΔEminus = BoundariesData[indices,5]
-        
-        if gap
-            plot!(JJ, ΔEplus + ΔEminus, 
-                xlabel=L"$J$", ylabel=L"$\Delta E_{\mathrm{gap}}$", 
-                title=L"Charge gap  as a function of $J$ ($\mu_0=%$μ0$)",
-                seriestype=:scatter,
-                markersize=1.5,
-                label=L"$L=%$L$",
-                color=MyColors[l % length(MyColors)])
-        else
-            plot!(JJ, μ0 .- ΔEminus, 
-                xlabel=L"$J$", ylabel=L"$\mu$",
-                label=L"$L=%$L$",
-                title=L"Extrapolation of $\mu_c^\pm(J)$ ($\mu_0=%$μ0$)",
-                seriestype=:scatter,
-                markersize=1.5,
-                color=MyColors[l % length(MyColors)])
-            plot!(JJ, μ0 .+ ΔEplus, seriestype=:scatter,
-                label="",
-                markersize=1.5,
-                color=MyColors[l % length(MyColors)])
-        end
+	JJ = 0	# Initialize JJ to use it outside the for loop
+	if !HideDataPoints
+		for (l, L) in enumerate(LL)
+		    indices = (BoundariesData[:, 1] .== L)
+		    JJ = BoundariesData[indices,2]
+		    ΔEplus = BoundariesData[indices,4]
+		    ΔEminus = BoundariesData[indices,5]
+		    
+		    if gap
+		        plot!(JJ, ΔEplus + ΔEminus, 
+					  xlabel=L"$J$", ylabel=L"$\Delta E_{\mathrm{gap}}$", 
+					  title=L"Charge gap  as a function of $J$ ($\mu_0=%$μ0$)",
+					  seriestype=:scatter,
+					  markersize=1.5,
+					  label=L"$L=%$L$",
+					  color=MyColors[l % length(MyColors)])
+		    else
+		        plot!(JJ, μ0 .- ΔEminus, 
+		              xlabel=L"$J$", ylabel=L"$\mu$",
+		              label=L"$L=%$L$",
+		              title=L"Extrapolation of $\mu_c^\pm(J)$ ($\mu_0=%$μ0$)",
+		              seriestype=:scatter,
+		              markersize=1.5,
+		              color=MyColors[l % length(MyColors)])
+		        plot!(JJ, μ0 .+ ΔEplus, seriestype=:scatter,
+		              label="",
+		              markersize=1.5,
+		              color=MyColors[l % length(MyColors)])
+		    end
+		end
+	elseif HideDataPoints
+		plot()
     end
+    
+    if DrawMottLobe
+    	MottLobeData = readdlm(MottLobeFilePath, ',', '\n'; comments=true)
+    	JJ = MottLobeData[:,1]
+    	ΔEp = MottLobeData[:,2]
+    	ΔEm = MottLobeData[:,3]
+    	
+    	plot!(JJ, [zeros(length(JJ)) ΔEp],
+			  linewidth=0,
+			  fillrange=[-ΔEm ones(length(JJ))],
+			  fillcolor=MyColors[2],
+			  fillalpha=0.15,
+			  label=nothing)
+    	
+    	plot!(JJ, -ΔEm,
+			  linewidth=0,
+			  fillrange=ΔEp,
+			  fillcolor=MyColors[end],
+			  fillalpha=0.15,
+			  label=nothing)
+			  
+		annotate!(0.06,0.5,"MI",color=MyColors[end])
+    	
+        plot!(JJ, [ΔEp, -ΔEm],
+              label=[L"\mu_c^+ \, (L \rightarrow \infty)" L"\mu_c^- \, (L \rightarrow \infty)"],
+              color=[MyColors[end] MyColors[end]],
+              linestyle=[:dash :dashdot])
+    end
+
+	if DrawHorizontalSweeps
+		xx = collect(range(start=minimum(JJ), stop=maximum(JJ), length=5)) # 4 arrows
+		μ0μ0 = Horizontalμμ
+		
+		xxArrows = collect(range( start=(xx[1]+xx[2])/2,
+								  stop=(xx[end-1]+xx[end])/2,
+								  length=length(xx)-1 ))
+		uu = 0.01 * ones(length(xxArrows))
+		vv = zeros(length(xxArrows))
+
+		for (j,μ0) in enumerate(μ0μ0)
+			yy = μ0*ones(length(xx))
+			plot!(xx, yy,
+				  label=nothing, # L"$\mu_0=%$μ0$",
+				  color=MyColors[4])
+				  #color=MyColors[j % length(MyColors)])
+			pop!(yy)		  
+			quiver!(xxArrows, yy, 
+					quiver=(uu,vv),
+					color=MyColors[4])
+					#color=MyColors[j % length(MyColors)])
+		end
+	end
+    
     if !=(FilePathOut,"")
         savefig(FilePathOut)
         if gap
@@ -189,8 +250,10 @@ function PlotPhaseBoundaries(FilePathIn::String;
         else
             println("\nPhase boundaries for L=$(Int.(LL)) plotted to ", FilePathOut)
         end
+    else
+    	gui()
     end
-end
+end			 
 
 # --------------------------- Correlation functions ----------------------------
 
@@ -258,4 +321,33 @@ function PlotCorrelationFunction(FilePathIn::String,
         savefig(FilePathOut)
         println("Correlator vs r plotted to ", FilePathOut)
     end
+end
+
+# ------------------------ Selection plot for check ----------------------------
+
+function PlotSelection(FilePathIn::String,
+					   Selections::Matrix{Float64})
+	
+	BoundariesData = readdlm(FilePathIn, ',', '\n'; comments=true)
+	JJ = BoundariesData[:,1]
+	ΔEp = BoundariesData[:,2]
+	ΔEm = BoundariesData[:,3]
+	
+	plot()
+    plot!(JJ,
+          [ΔEp, -ΔEm],
+          label=[L"\mu_c^+ \, (L \rightarrow \infty)" L"\mu_c^- \, (L \rightarrow \infty)"], 
+          xlabel=L"J", ylabel=L"$\mu$", 
+          title="Fitted phase boundaries",
+          alpha=1.0)
+     
+    rectangle(l, r, u, d) = Shape(l .+ [0,r-l,r-l,0], d .+ [0,0,u-d,u-d])
+    for i in 1:size(Selections,1)
+    	Left, Right, Up, Down = Selections[i,:] 
+    	plot!(rectangle(Left,Right,Up,Down),
+    		  label="Selection",
+    		  linewidth=0,
+    		  opacity=0.2)
+	end
+	gui()		# .pdf file saved on /tmp, erased on boot
 end
