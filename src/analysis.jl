@@ -57,7 +57,7 @@ function main()
 
         elseif UserMode=="--boundaries"
         	
-			μ0 = 0.0#Horizontalμμ[1] # CHANGE!
+			μ0 = Horizontalμμ[3] # CHANGE!
 
             FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/μ0=$(μ0)_L=$HorizontalLL.txt"
             PhaseBoundariesDir = PROJECT_ROOT * "/../analysis/phase_boundaries/μ0=$(μ0)/"
@@ -78,36 +78,34 @@ function main()
 
         elseif UserMode=="--gamma"
         
-        	# # TODO Use μ0 = 0
-			# μ0 = Horizontalμμ[1]
-			
-            # FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/μ0=$(μ0)_L=$HorizontalLL.txt"
-            
-            # # Plot
-            # # TODO Do we need today()?
-            # FileGammaPlot = PROJECT_ROOT * "/../analysis/gamma/gamma_data_plot_today().pdf"
-            # j = 50 # CHANGE: which J to choose for the plot
-            # PlotCorrelationFunction(FilePathIn, j; FilePathOut=FileGammaPlot, overwrite=false)
-
-            # # Fit, Plot
-            # PlotPathOut = PROJECT_ROOT * "/../analysis/gamma/gamma_final_plot.pdf"
-            # SinglePlotPathOut = PROJECT_ROOT * "/../analysis/gamma/gamma_power_law_fit_plot.pdf"
-            # FilePathFit = PROJECT_ROOT * "/../analysis/gamma/fit_correlation.txt"
-            # FitCorrelationFunction(FilePathIn, FilePathFit; PlotPathOut=PlotPathOut, SingleFitPlotPathOut=SinglePlotPathOut, SingleFitPlotj=j)
-
             global HorizontalLL, RectangularLL # Imported from setup
 
-            μ0 = 0.0 # TODO change
-            FitRange = 10
-            rMins = [2, 4, 6, 8]
+            μ0 = Horizontalμμ[3] # CHANGE!
+            rMin = 2
+            rrMax = [12, 14, 16, 18, 20]
             JMin = 0.2
             LMin = 20
 
+            GammaDir = PROJECT_ROOT * "/../analysis/gamma/μ0=$(μ0)/"
+            mkpath(GammaDir)
+
             FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/μ0=$(μ0)_L=$HorizontalLL.txt"
-            FilePathFit = PROJECT_ROOT * "/../analysis/gamma/fitted_Luttinger_parameter_μ0=$μ0.txt"
+            FilePathFit = GammaDir * "fitted_Luttinger_parameter_μ0=$μ0.txt"
 
-            FitRoutineGamma(FilePathIn, FilePathFit; FitRange, rMins, JMin, LMin)
+            # (Step 1) Perform all the fits for all J>J_min
+            FitRoutineGamma(FilePathIn, FilePathFit; rMin, rrMax, JMin, LMin)
 
+            # (Step 2) Plot Γ(r) vs r for one  given (J, μ0) ( j ∈ [1, 50] )
+            j = 30
+
+            FileGammaPlot = GammaDir * "data_gamma_j=$(j)_μ0=$μ0.pdf"
+            PlotPowerLawGamma(FilePathIn, μ0, j; FilePathOut=FileGammaPlot, overwrite=false)
+
+            # (Step 3) Plot K_∞ vs J, reading data from Step 1
+            FilePathInK = GammaDir * "fitted_Luttinger_parameter_μ0=$μ0.txt"
+            FilePathOutKInfty = GammaDir * "fitted_Luttinger_plot_μ0=$μ0.pdf"
+            PlotFitResultsK(FilePathInK, μ0; FilePathOut=FilePathOutKInfty)
+            
 		else
 			error(ModeErrorMsg)
 			exit()

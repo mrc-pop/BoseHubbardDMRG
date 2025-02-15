@@ -259,14 +259,16 @@ function PlotPhaseBoundaries(FilePathIn::String;
     end
 end			 
 
+# ------------------------------------------------------------------------------
 # --------------------------- Correlation functions ----------------------------
+# ------------------------------------------------------------------------------
 
-function PlotCorrelationFunction(FilePathIn::String,
-                                 j::Int64;
-                                 FilePathOut="",
-                                 overwrite=true)
-
-    """ Plot the correlation function Γ(r) for the chosen J (the j-th)."""
+""" Plot the correlation function Γ(r) for the chosen J (the j-th) and μ0."""
+function PlotPowerLawGamma(FilePathIn::String,
+                           μ0::Float64,
+                           j::Int64;
+                           FilePathOut="",
+                           overwrite=true)
 
     # Read the input data
     data = readdlm(FilePathIn, ';', '\n'; comments=true)
@@ -290,7 +292,7 @@ function PlotCorrelationFunction(FilePathIn::String,
 
     J = JJ[j] # choose the j-th J
 
-    println("Chosen value of J: $J")
+    println("Chosen value of J: $J, chosen value of μ0: $μ0")
 
     for L in LL
         # Filter data for the current J and L
@@ -311,7 +313,7 @@ function PlotCorrelationFunction(FilePathIn::String,
         scatter!(r, Γeven,
             xlabel=L"$r$",
             ylabel=L"$\Gamma(r)$",
-            title=L"Correlation function ($J=%$J_round$)",
+            title=L"Correlation function ($J=%$J_round, \mu_0 = %$μ0$)",
             label=L"L=%$L",
             markersize=2,
             xscale=:log10,
@@ -324,6 +326,61 @@ function PlotCorrelationFunction(FilePathIn::String,
     if !=(FilePathOut,"")
         savefig(FilePathOut)
         println("Correlator vs r plotted to ", FilePathOut)
+    end
+end
+
+# function PlotFittedDataGamma()
+    
+# end
+
+"""
+Read the fit results from txt.
+Plot the results of the fits, i.e., K_∞ vs J, for all the rMin, rMax available.
+"""
+function PlotFitResultsK(FilePathIn::String,
+                         μ0::Float64;
+                         FilePathOut="")
+    # Read the input data
+    FittedData = readdlm(FilePathIn, ',', '\n'; comments=true)
+
+    # Extract unique J, rMin values
+    JJ = unique(FittedData[:, 1])
+    rrMax = unique(FittedData[:, 3])
+    rrMin = unique(FittedData[:, 2]) # there should be only 1 unique value
+    
+    rMin = Int64(rrMin[1])
+
+    if length(rMin) != 1
+        print("Error! More than one rMin. Which should I put in the title?")
+        return
+    end
+    
+    AllK_∞ = FittedData[:,4]
+    e_AllK_∞ = FittedData[:,4]
+
+    plot()
+
+    for rMax in rrMax
+        # Filter data corresponding to the current rMin
+        Filter = (FittedData[:, 3] .== rMax)
+        K_∞ = AllK_∞[Filter]
+        e_K_∞ = e_AllK_∞[Filter]
+
+        scatter!(JJ, K_∞,
+                 xlabel=L"$J$",
+                 ylabel=L"$K_\infty$",
+                 title=L"Luttinger parameter vs $J$ ($\mu_0 = %$μ0$, $r_\mathrm{min}=%$rMin$)",
+                 label=L"$r_\mathrm{max}=%$(Int64(rMax))$",
+                 markersize=2,
+                 legend=:topright)
+
+    end
+
+    if FilePathOut != ""
+        savefig(FilePathOut)
+        println("\nPlot of K_∞ vs J plotted to ", FilePathOut)
+    else
+        gui()  
     end
 end
 
