@@ -1,33 +1,30 @@
 #!/usr/bin/julia
 
-# # -------------------- Parse array (for reading Γ and C) -----------------------
-
-# function ParseArray(str)
-#     return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
-# end
-
 # ---------------------------------- Heatmap -----------------------------------
 
+"""
+Plot the variance of the number of particles from data saved
+in `FilePathIn`.
+"""
 function PlotHeatmap(L::Int64,
                      FilePathIn::String;
                      PhaseBoundariesFilePath="",
                      VarianceFilePathOut="",
                      AFilePathOut="",
                      KFilePathOut="")
-    """
-    Plot the variance of the number of particles from data saved
-    in `FilePathIn`.
-    """
     
     # Extract data coming from rectangular_sweep
     VarianceData = readdlm(FilePathIn, ';', '\n'; comments=true)
+    # TODO not uniform ; vs , everywhere
+
+    # display(VarianceData)
 
     JJ = VarianceData[:,1]
     μμ = VarianceData[:,2]
     EE = VarianceData[:,3]
     varvar = VarianceData[:,4]
     aa = VarianceData[:,5]
-    DD = VarianceData[:,10] # Re(D)
+    # DD = VarianceData[:,10] # Re(D)
 
     NumJ = length(unique(JJ))
     Numμ = length(unique(μμ))
@@ -41,57 +38,23 @@ function PlotHeatmap(L::Int64,
     for jj in 1:NumJ
         Variances[:,jj] = varvar[ Numμ*(jj-1)+1 : Numμ*jj ]
         OrderParameters[:,jj] = aa[ Numμ*(jj-1)+1 : Numμ*jj ]
-        FourierTransforms[:,jj] = DD[ Numμ*(jj-1)+1 : Numμ*jj ]
+        # FourierTransforms[:,jj] = DD[ Numμ*(jj-1)+1 : Numμ*jj ]
     end
-
-    display(FourierTransforms)
 
     i = (ceil(Int64, L/2)) # site index
 
-    # Plot variance
-    heatmap(unique(JJ), unique(μμ), Variances, 
-            xlabel=L"J",
-            ylabel=L"μ",
-            title=L"Variance $\delta n_i^2$ ($L=%$L, i=%$i$)")
-    ylabel!(L"μ")
+    if VarianceFilePathOut != ""
+        # Plot variance
+        heatmap(unique(JJ), unique(μμ), Variances, 
+                xlabel=L"J",
+                ylabel=L"μ",
+                title=L"Variance $\delta n_i^2$ ($L=%$L, i=%$i$)")
+        ylabel!(L"μ")
 
-    if PhaseBoundariesFilePath != ""
-        # If this argument is specified, plot the finite-size
-        # phase boundaries, for the closest L available
-        BoundariesData = readdlm(PhaseBoundariesFilePath, ';', '\n'; comments=true)
-        LL = unique(BoundariesData[:, 1])
-
-        L_PB_index = argmin(abs.(LL .- L)) # best approximation of L
-        L_PhaseBoundaries = LL[L_PB_index]
-
-        if L_PhaseBoundaries !== L
-            println("L=$L is not among horizontal data. Using the closest available size, L=$L_PhaseBoundaries. ")
+        if PhaseBoundariesFilePath != ""
+            HeatmapAddPhaseBoundaries(PhaseBoundariesFilePath, L, JJ, μμ)
         end
 
-        # Filter data corresponding to L_PhaseBoundaries
-        indices = (BoundariesData[:, 1] .== L_PhaseBoundaries)
-        JJ_PB = BoundariesData[indices, 2]
-        ΔEplus = BoundariesData[indices, 4]
-        ΔEminus = BoundariesData[indices, 5]
-        
-        plot!(JJ_PB, -ΔEminus, 
-            #xlabel=L"$J$", ylabel=L"$\mu$",
-            label=L"$L=%$L_PhaseBoundaries$",
-            seriestype=:scatter,
-            markersize=1.5,
-            color="green",
-            xlimits=(minimum(JJ), maximum(JJ)),
-            ylimits=(minimum(μμ), maximum(μμ)))
-        plot!(JJ_PB, ΔEplus, seriestype=:scatter,
-            label="",
-            markersize=1.5,
-            color="green",
-            xlimits=(minimum(JJ), maximum(JJ)),
-            ylimits=(minimum(μμ), maximum(μμ)))        
-    end
-
-    if VarianceFilePathOut != ""
-        # If this argument is specified, save plot.
         savefig(VarianceFilePathOut)
         println("Variance plot for L=$L saved on file!")
     end
@@ -102,6 +65,12 @@ function PlotHeatmap(L::Int64,
                 xlabel=L"J",
                 ylabel=L"μ",
                 title=L"$\langle a_i \rangle$ ($L=%$L, i=%$i$)")
+
+        # Add phase boundaries
+        if PhaseBoundariesFilePath != ""
+            HeatmapAddPhaseBoundaries(PhaseBoundariesFilePath, L, JJ, μμ)
+        end
+
         savefig(AFilePathOut)
         println("Order parameter plot for L=$L saved on file!")
     end
@@ -119,6 +88,47 @@ function PlotHeatmap(L::Int64,
         savefig(KFilePathOut)
         println("K from D plot for L=$L saved on file!")        
     end
+end
+
+"""
+Add the phase boundaries to the heatmap, for the closest size L available,
+and adjusting the xlimits and ylimits appropriately.
+"""
+function HeatmapAddPhaseBoundaries(PhaseBoundariesFilePath::String,
+                                   L::Int64,
+                                   JJ::Array{Float64},
+                                   μμ::Array{Float64};
+                                   μ0=0.0)
+                                   
+    BoundariesData = readdlm(PhaseBoundariesFilePath, ';', '\n'; comments=true)
+    LL = unique(BoundariesData[:, 1])
+
+    L_PB_index = argmin(abs.(LL .- L)) # best approximation of L
+    L_PhaseBoundaries = LL[L_PB_index]
+
+    if L_PhaseBoundaries !== L
+        println("L=$L is not among horizontal data. Using the closest available size, L=$L_PhaseBoundaries. (μ0=$μ0)")
+    end
+
+    # Filter data corresponding to L_PhaseBoundaries
+    indices = (BoundariesData[:, 1] .== L_PhaseBoundaries)
+    JJ_PB = BoundariesData[indices, 2]
+    μUp = BoundariesData[indices, 4]
+    μDown = BoundariesData[indices, 5]
+    
+    plot!(JJ_PB, -μDown .+ 2 * μ0, 
+        label=L"$L=%$L_PhaseBoundaries$",
+        seriestype=:scatter,
+        markersize=1.5,
+        color="gray70",
+        xlimits=(minimum(JJ), maximum(JJ)),
+        ylimits=(minimum(μμ), maximum(μμ)))
+    plot!(JJ_PB, μ0 .+ μUp, seriestype=:scatter,
+        label="",
+        markersize=1.5,
+        color="gray70",
+        xlimits=(minimum(JJ), maximum(JJ)),
+        ylimits=(minimum(μμ), maximum(μμ)))      
 end
 
 # ----------------------------- Phase boundaries -------------------------------

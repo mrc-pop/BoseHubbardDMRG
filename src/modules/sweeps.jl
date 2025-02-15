@@ -130,7 +130,7 @@ function RectangularSweep(i::Int64,
 			                                   FixedN=false,
 											   RandomPsi0=false)
 					E, nVariance, aAvg = Results
-			        write(DataFile,"$J, $μ, $E, $(nVariance[i]), $(aAvg[i]) # MI\n")
+			        write(DataFile,"$J; $μ; $E; $(nVariance[i]); $(aAvg[i]) # MI\n")
 			    else
 			    	Results = RunDMRGAlgorithm(ModelParameters,
 					                           DMRGParametersSF;

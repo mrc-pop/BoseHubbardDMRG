@@ -80,11 +80,13 @@ function main()
 	    	LL = RectangularLL				# Imported from setup
 	    	μμ = Rectangularμμ				# Imported from setup
 
+			μ0 = 0.0 # μ0 from which to take phase boundaries
+
 			NN = LL							# Unitary filling
 
 			# Uncomment here to use L-wise phase boundaries
 			# FilePathIn =  PROJECT_ROOT * "/simulations/horizontal_sweep/L=$LL.txt"
-			FilePathIn =  PROJECT_ROOT * "/analysis/phase_boundaries/fitted_phase_boundaries.txt"
+			FilePathIn =  PROJECT_ROOT * "/analysis/phase_boundaries/μ0=$μ0/fitted_phase_boundaries_μ0=$μ0.txt"
 
 			for (j,L) in enumerate(LL)
 				N = NN[j]

@@ -24,8 +24,6 @@ function main()
 	else
         UserMode = ARGS[1]
 
-        # TODO add other --options
-
         # ----------------------------------------------------------------------
         # ---------------------------- Plot Heatmap ----------------------------
         # ----------------------------------------------------------------------
@@ -37,18 +35,20 @@ function main()
 			PhaseBoundariesLL = HorizontalLL
             LL = RectangularLL               
 
-            μ0 = 0.0 # TODO change
+            μ0 = 0.0 # TODO CHANGE!
 
             PhaseBoundariesFilePath = PROJECT_ROOT * "/../simulations/horizontal_sweep/μ0=$(μ0)_L=$PhaseBoundariesLL.txt"
+            HeatmapDir = PROJECT_ROOT * "/../analysis/heatmap/"
 
 			for L in LL
 				# TODO Do we need today()?
-                FilePathIn = PROJECT_ROOT * "/../simulations/tip_sweep/L=$(L)_site=$(ceil(Int64, L/2)).txt"
-				VarianceFilePathOut = PROJECT_ROOT * "/../analysis/heatmap/variance_L=$(L)_$today().pdf" # Variance plot
-	            AFilePathOut = PROJECT_ROOT * "/../analysis/heatmap/a_L=$(L)_$today().pdf"       # <a_i> plot
-    	        KFilePathOut = PROJECT_ROOT * "/../analysis/heatmap/K_L=$(L)_$today().pdf"       # K plot
+                FilePathIn = PROJECT_ROOT * "/../simulations/rectangular_sweep/L=$(L)_site=$(ceil(Int64, L/2)).txt"
+
+				VarianceFilePathOut = PROJECT_ROOT * "/../analysis/heatmap/variance_L=$(L)_$(today()).pdf" # Variance plot
+	            AFilePathOut = HeatmapDir * "a_L=$(L)_$(today()).pdf"       # <a_i> plot
+    	        KFilePathOut = HeatmapDir * "K_L=$(L)_$(today()).pdf"       # K plot
 				
-	            PlotHeatmap(L, FilePathIn; PhaseBoundariesFilePath, VarianceFilePathOut, AFilePathOut, KFilePathOut)
+	            PlotHeatmap(L, FilePathIn; PhaseBoundariesFilePath, VarianceFilePathOut, AFilePathOut)
    			end
 
         # ----------------------------------------------------------------------
