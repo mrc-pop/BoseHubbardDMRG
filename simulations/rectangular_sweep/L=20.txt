@@ -1,3 +1,0 @@
-# Hubbard model DMRG. L=20, N=20, nmax=4
-# NOTE: Different DMRG settings have been used for MI and SF. Calculation performed on central site.
-# J; μ; E; n_variance; <a> [calculated 2025-02-15T20:04:51.093]
