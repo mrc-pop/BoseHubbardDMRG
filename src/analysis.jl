@@ -51,26 +51,26 @@ function main()
 	            PlotHeatmap(L, FilePathIn; PhaseBoundariesFilePath, VarianceFilePathOut, AFilePathOut, KFilePathOut)
    			end
 
+        # ----------------------------------------------------------------------
         # --------------------- Boundary between SF and MI ---------------------
+        # ----------------------------------------------------------------------
 
         elseif UserMode=="--boundaries"
         	
-        	# TODO Use μ0 = 0
-			μ0 = Horizontalμμ[1]
+			μ0 = 0.0#Horizontalμμ[1] # CHANGE!
 
             FilePathIn = PROJECT_ROOT * "/../simulations/horizontal_sweep/μ0=$(μ0)_L=$HorizontalLL.txt"
-            PhaseBoundariesDir = PROJECT_ROOT * "/../analysis/phase_boundaries/"
-            
-            # TODO Do we need today()?
-            FilePathPlot = PhaseBoundariesDir * "phaseboundaries_today().pdf"
-            FilePathFit = PhaseBoundariesDir * "fitted_phase_boundaries_today().txt"
-            
-            # TODO Do we need today()?
-            FilePathPlotOut = PhaseBoundariesDir * "phaseboundaries_fit_today().pdf"
-            FilePathSinglePlotOut = PhaseBoundariesDir * "phaseboundaries_fit_single_today().pdf"
+            PhaseBoundariesDir = PROJECT_ROOT * "/../analysis/phase_boundaries/μ0=$(μ0)/"
+            mkpath(PhaseBoundariesDir)
 
-            PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut=FilePathPlot)
-            FitPhaseBoundaries(FilePathIn, FilePathFit; FilePathPlotOut, FilePathSinglePlotOut)
+            FilePathPlot = PhaseBoundariesDir * "phaseboundaries_μ0=$(μ0).pdf"
+            FilePathFit = PhaseBoundariesDir * "fitted_phase_boundaries_μ0=$(μ0).txt"
+            
+            FilePathPlotOut = PhaseBoundariesDir * "phaseboundaries_fit_μ0=$(μ0).pdf"
+            FilePathSinglePlotOut = PhaseBoundariesDir * "phaseboundaries_fit_single_μ0=$(μ0).pdf"
+
+            PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut=FilePathPlot, μ0)
+            FitPhaseBoundaries(FilePathIn, FilePathFit; FilePathPlotOut, FilePathSinglePlotOut, μ0)
 
         # ----------------------------------------------------------------------
         # ----------------------- Correlation function Γ -----------------------

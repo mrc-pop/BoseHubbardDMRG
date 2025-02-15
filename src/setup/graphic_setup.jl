@@ -36,6 +36,12 @@ Plots.default(
     guidefontsize = 10,
     tickfontsize = 10,
 
+    fontfamily = "Computer Modern",
+    legendfontfamily = "Computer Modern",
+    titlefontfamily = "Computer Modern",
+    guidefontfamily = "Computer Modern",
+    tickfontfamily = "Computer Modern",
+
     markerstrokewidth=0,
     #margin = 1Plots.mm,
     framestyle = :box,

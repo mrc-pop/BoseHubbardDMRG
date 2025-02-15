@@ -6,18 +6,19 @@ using LsqFit
 
 function FitPhaseBoundaries(FilePathIn::String,
 							FilePathOut::String;
+                            μ0=0.0,
 							FilePathPlotOut="",
 							FilePathSinglePlotOut="")
     						# makeplot=false, 
     						# makesinglefitplot=false)
     						
     """
-    Fit ΔEplus(L) and ΔEminus(L) as functions of 1/L for each J, and extract 
+    Fit μUp(L) and μDown(L) as functions of 1/L for each J, and extract 
     their values at L -> ∞. Save the results to a file. 
     If makeplot=true, plots the result.
 
     The output file will have the following columns:
-    # J, ΔEplus(∞), ΔEminus(∞), error_ΔEplus(∞), error_ΔEminus(∞), chi2_plus, chi2_minus
+    # J, μUp(∞), μDown(∞), error_μUp(∞), error_μDown(∞), chi2_plus, chi2_minus
     """
 
     # Read the input data
@@ -26,10 +27,10 @@ function FitPhaseBoundaries(FilePathIn::String,
     # Extract unique J values
     JJ = unique(data[:, 2])
 
-    ΔEplus_fit = []
-    ΔEminus_fit = []
-    error_ΔEplus = []
-    error_ΔEminus = []
+    μUp_fit = []
+    μDown_fit = []
+    error_μUp = []
+    error_μDown = []
     chi2_plus = []
     chi2_minus = []
     
@@ -42,28 +43,28 @@ function FitPhaseBoundaries(FilePathIn::String,
         # Filter data for the current J # and only include rows where L > 20
         filtered_data = (data[:, 2] .== J) #.& (data[:,1] .> 20.0)
         L = data[filtered_data, 1]
-        ΔEplus = data[filtered_data, 4]
-        ΔEminus = data[filtered_data, 5]
+        μUp = data[filtered_data, 4]
+        μDown = data[filtered_data, 5]
 
         inv_L = 1.0 ./ L
 
-        # Fit ΔEplus
-        fit_plus = curve_fit(fit_func, inv_L, ΔEplus, p0) 
-        ΔEplus_inf = fit_plus.param[2]  # Intercept (value at L -> ∞)
+        # Fit μUp
+        fit_plus = curve_fit(fit_func, inv_L, μUp, p0) 
+        μUp_inf = fit_plus.param[2]  # Intercept (value at L -> ∞)
         error_plus = stderror(fit_plus)[2]
         chi2p = sum(fit_plus.resid.^2)
 
-        # Fit ΔEminus
-        fit_minus = curve_fit(fit_func, inv_L, ΔEminus, p0)
-        ΔEminus_inf = fit_minus.param[2]  # Intercept (value at L -> ∞)
+        # Fit μDown
+        fit_minus = curve_fit(fit_func, inv_L, μDown, p0)
+        μDown_inf = fit_minus.param[2]  # Intercept (value at L -> ∞)
         error_minus = stderror(fit_minus)[2]  
         chi2m = sum(fit_minus.resid.^2)
 
         # Save the results for this J
-        push!(ΔEplus_fit, ΔEplus_inf)
-        push!(ΔEminus_fit, ΔEminus_inf)
-        push!(error_ΔEplus, error_plus)
-        push!(error_ΔEminus, error_minus)
+        push!(μUp_fit, μUp_inf)
+        push!(μDown_fit, μDown_inf)
+        push!(error_μUp, error_plus)
+        push!(error_μDown, error_minus)
         push!(chi2_plus, chi2p)
         push!(chi2_minus, chi2m)
 
@@ -79,13 +80,13 @@ function FitPhaseBoundaries(FilePathIn::String,
 
             # Plot the data and best-fit lines
             round_J = round(J, digits=3)
-            scatter(inv_L, ΔEplus, label=L"$\Delta E^+$ data", xlabel=L"1/L", 
-                ylabel=L"$\Delta E$", title="FSS fit results for J = $round_J",
+            scatter(inv_L, μUp, label=L"$\Delta E^+$ data", xlabel=L"1/L", 
+                ylabel=L"$\Delta E$", title=L"FSS fit results for $J = %$round_J$ ($\mu_0 = %$μ0$)",
                 legend=:topleft, markersize=2, color=MyColors[1],
                 xlimits=(0.0,maximum(inv_L)*1.1))
             plot!(fit_x, fit_y_plus, label=L"$\Delta E^+$ fit", color=MyColors[1],
                 alpha=0.7)
-            #scatter!(inv_L, -ΔEminus, label=L"$\Delta E^-$ data", markersize=2,
+            #scatter!(inv_L, -μDown, label=L"$\Delta E^-$ data", markersize=2,
             #    color=MyColors[2])
             #plot!(fit_x, -fit_y_minus, label=L"$\Delta E^-$ fit", color=MyColors[2],
             #    alpha=0.7)
@@ -95,13 +96,13 @@ function FitPhaseBoundaries(FilePathIn::String,
     end
 
     # Join the results for saving correctly on file
-    results = hcat(JJ, ΔEplus_fit, ΔEminus_fit, error_ΔEplus, error_ΔEminus, 
+    results = hcat(JJ, μUp_fit, μDown_fit, error_μUp, error_μDown, 
     chi2_plus, chi2_minus)
 
     # Save the results
     open(FilePathOut, "w") do file
-        write(file, "# J, ΔEplus(∞), ΔEminus(∞), error_ΔEplus(∞), ", 
-        "error_ΔEminus(∞), chi2_plus, chi2_minus\n")
+        write(file, "# J, μUp(∞), μDown(∞), error_μUp(∞), ", 
+        "error_μDown(∞), chi2_plus, chi2_minus\n")
         writedlm(file, results, ',')
     end
 
@@ -111,10 +112,10 @@ function FitPhaseBoundaries(FilePathIn::String,
         # PlotPhaseBoundaries(FilePathIn; gap=false, overwrite=true)
         plot()
         plot!(JJ,
-              [ΔEplus_fit, -ΔEminus_fit],
+              [μUp_fit, -μDown_fit .+ 2 * μ0],
               label=[L"\mu_c^+ \, (L \rightarrow \infty)" L"\mu_c^- \, (L \rightarrow \infty)"], 
               xlabel=L"J", ylabel=L"$\mu$", 
-              title="Fitted phase boundaries",
+              title=L"Fitted phase boundaries ($\mu_0 = %$μ0$)",
               alpha=1.0)
         savefig(FilePathPlotOut)
         println("Phase boundaries fit plotted to ", FilePathPlotOut)

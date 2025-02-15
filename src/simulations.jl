@@ -53,7 +53,7 @@ function main()
 	    	
 				DataFile = open(FilePathOut,"w")
 				write(DataFile,"# Hubbard model DMRG. This file contains many sizes. nmax=$nmax, μ0=$μ0, nsweeps=$nsweeps, cutoff=$cutoff\n")
-				write(DataFile,"# L; J; E; deltaE_g^+; deltaE_g^-; nVariance; Γ; eΓ; C; eC [calculated $(now())]\n")
+				write(DataFile,"# L; J; E; μ_c^+; μ_c^-; nVariance; Γ; eΓ; C; eC [calculated $(now())]\n")
 				close(DataFile)
 	    	
 		    	for L in LL

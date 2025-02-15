@@ -55,7 +55,7 @@ function HorizontalSweep(L::Int64,
             ΔEplus = E[3] - E[2]
             ΔEminus = E[2] - E[1]
             μUp = ΔEplus + μ0
-            μDown = -ΔEminus + μ0
+            μDown = - ΔEminus - μ0 # Sign problem otherwise
 
             # Write results to the file
             # TODO Add aAvg, make it uniform in scripts

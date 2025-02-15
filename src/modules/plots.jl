@@ -145,7 +145,11 @@ function PlotPhaseBoundaries(FilePathIn::String;
     BoundariesData = readdlm(FilePathIn, ';', '\n'; comments=true)
     
     # gr(legend_background_color=RGBA{Float64}(1, 1, 1, 0.8))
-    gr()
+
+    if DrawHorizontalSweeps
+        gr()
+    end
+
     if overwrite
         plot()
     end
@@ -162,11 +166,11 @@ function PlotPhaseBoundaries(FilePathIn::String;
 		for (l, L) in enumerate(LL)
 		    indices = (BoundariesData[:, 1] .== L)
 		    JJ = BoundariesData[indices,2]
-		    ΔEplus = BoundariesData[indices,4]
-		    ΔEminus = BoundariesData[indices,5]
+		    μUp = BoundariesData[indices,4]
+		    μDown = BoundariesData[indices,5]
 		    
 		    if gap
-		        plot!(JJ, ΔEplus + ΔEminus, 
+		        plot!(JJ, μUp - μDown, 
 					  xlabel=L"$J$", ylabel=L"$\Delta E_{\mathrm{gap}}$", 
 					  title=L"Charge gap  as a function of $J$ ($\mu_0=%$μ0$)",
 					  seriestype=:scatter,
@@ -174,14 +178,14 @@ function PlotPhaseBoundaries(FilePathIn::String;
 					  label=L"$L=%$L$",
 					  color=MyColors[l % length(MyColors)])
 		    else
-		        plot!(JJ, μ0 .- ΔEminus, 
+		        plot!(JJ, -μDown .+ 2 * μ0, 
 		              xlabel=L"$J$", ylabel=L"$\mu$",
 		              label=L"$L=%$L$",
 		              title=L"Extrapolation of $\mu_c^\pm(J)$ ($\mu_0=%$μ0$)",
 		              seriestype=:scatter,
 		              markersize=1.5,
 		              color=MyColors[l % length(MyColors)])
-		        plot!(JJ, μ0 .+ ΔEplus, seriestype=:scatter,
+		        plot!(JJ, μUp, seriestype=:scatter,
 		              label="",
 		              markersize=1.5,
 		              color=MyColors[l % length(MyColors)])
@@ -338,7 +342,7 @@ function PlotSelection(FilePathIn::String,
           [ΔEp, -ΔEm],
           label=[L"\mu_c^+ \, (L \rightarrow \infty)" L"\mu_c^- \, (L \rightarrow \infty)"], 
           xlabel=L"J", ylabel=L"$\mu$", 
-          title="Fitted phase boundaries",
+          title=L"Fitted phase boundaries",
           alpha=1.0)
      
     rectangle(l, r, u, d) = Shape(l .+ [0,r-l,r-l,0], d .+ [0,0,u-d,u-d])
