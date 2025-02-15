@@ -80,11 +80,12 @@ function main()
         
             global HorizontalLL, RectangularLL # Imported from setup
 
-            μ0 = Horizontalμμ[3] # CHANGE!
-            rMin = 2
-            rrMax = [12, 14, 16, 18, 20]
+            μ0 = 0.0 #Horizontalμμ[3] # CHANGE!
+            rrMin = [2, 4, 6, 8]
+            rrMax = [12, 14, 16, 18]
+            # FitRange = 10
             JMin = 0.2
-            LMin = 20
+            LMin = 30
 
             GammaDir = PROJECT_ROOT * "/../analysis/gamma/μ0=$(μ0)/"
             mkpath(GammaDir)
@@ -93,10 +94,10 @@ function main()
             FilePathFit = GammaDir * "fitted_Luttinger_parameter_μ0=$μ0.txt"
 
             # (Step 1) Perform all the fits for all J>J_min
-            FitRoutineGamma(FilePathIn, FilePathFit; rMin, rrMax, JMin, LMin)
+            FitRoutineGamma(FilePathIn, FilePathFit; rrMin, rrMax, JMin, LMin)
 
             # (Step 2) Plot Γ(r) vs r for one  given (J, μ0) ( j ∈ [1, 50] )
-            j = 30
+            j = 43
 
             FileGammaPlot = GammaDir * "data_gamma_j=$(j)_μ0=$μ0.pdf"
             PlotPowerLawGamma(FilePathIn, μ0, j; FilePathOut=FileGammaPlot, overwrite=false)

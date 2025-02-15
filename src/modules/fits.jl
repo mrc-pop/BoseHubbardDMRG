@@ -218,7 +218,7 @@ of J, and save it on file.
 """
 function FitRoutineGamma(FilePathIn, 
                          FilePathOut;
-                         rMin=2,
+                         rrMin=[2, 4, 6, 8],
                          rrMax=[12, 14, 16, 18],
                          JMin = 0.0,
                          LMin = 10)
@@ -250,41 +250,42 @@ function FitRoutineGamma(FilePathIn,
     # Perform the fits and save the results
     for J in JJ
         println("Making all the fits for J=$J...")
-        for rMax in rrMax
-            KK_J = zeros(Float64, length(LL))
-            e_KK_J = zeros(Float64, length(LL))
+        for rMin in rrMin
+            for rMax in rrMax
+                KK_J = zeros(Float64, length(LL))
+                e_KK_J = zeros(Float64, length(LL))
 
-            for (l,L) in enumerate(LL)
-                # Select data for current (J,L)
-                filter = (HorizontalData[:, 2] .== J) .& (HorizontalData[:, 1] .== L)
-                Γeven = Γall[filter][1]
-                e_Γeven = eΓall[filter][1]
+                for (l,L) in enumerate(LL)
+                    # Select data for current (J,L)
+                    filter = (HorizontalData[:, 2] .== J) .& (HorizontalData[:, 1] .== L)
+                    Γeven = Γall[filter][1]
+                    e_Γeven = eΓall[filter][1]
 
-                # Remove last Γ because error is NaN. TODO: solve 
-                Γeven = Γeven[1:end-1]
-                e_Γeven = e_Γeven[1:end-1]
+                    # Error on Γ(r=L/2) is NaN. Copy the error of the preceding one.
+                    e_Γeven[end] = e_Γeven[end-1]
 
-                """
-                println("Fitting Γ as a power-law for J=$(round(J,digits=3)), L=$L, rMin=$rMin, rMax=$rMax...")
-                """
+                    """
+                    println("Fitting Γ as a power-law for J=$(round(J,digits=3)), L=$L, rMin=$rMin, rMax=$rMax...")
+                    """
 
-                # Perform the power law fit on Γ for the current (J,L)
-                K_JL, e_K_JL, chi2n = FitPowerLawGamma(Γeven, e_Γeven; rMin, rMax, ThreeParameterFit=false)
-               
-                # Save on the arrays
-                KK_J[l] = K_JL
-                e_KK_J[l] = e_K_JL
+                    # Perform the power law fit on Γ for the current (J,L)
+                    K_JL, e_K_JL, chi2n = FitPowerLawGamma(Γeven, e_Γeven; rMin, rMax, ThreeParameterFit=false)
                 
-                """
-                println("   Best-fit: K=$(round(K_JL, digits=4)) +/- $(round(e_K_JL, digits=4))\n")
-                """
+                    # Save on the arrays
+                    KK_J[l] = K_JL
+                    e_KK_J[l] = e_K_JL
+                    
+                    """
+                    println("   Best-fit: K=$(round(K_JL, digits=4)) +/- $(round(e_K_JL, digits=4))\n")
+                    """
+                end
+
+                # Perform the FSS fit on K for the current J
+                K_∞, e_K_∞, chi2n = FitFiniteSizeScalingK(LL, KK_J, e_KK_J)
+
+                # Save the results
+                write(DataFile,"$J, $rMin, $rMax, $K_∞, $e_K_∞, $chi2n\n")
             end
-
-            # Perform the FSS fit on K for the current J
-            K_∞, e_K_∞, chi2n = FitFiniteSizeScalingK(LL, KK_J, e_KK_J)
-
-            # Save the results
-            write(DataFile,"$J, $rMin, $rMax, $K_∞, $e_K_∞, $chi2n\n")
         end
         println("   Done! Results saved on file.\n")
     end
