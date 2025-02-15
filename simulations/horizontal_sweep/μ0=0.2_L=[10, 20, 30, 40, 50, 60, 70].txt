@@ -1,0 +1,2 @@
+# Hubbard model DMRG. This file contains many sizes. nmax=4, μ0=0.2, nsweeps=20, cutoff=[1.0e-8]
+# L; J; E; Γ; eΓ; [calculated 2025-02-15T20:02:44.704]

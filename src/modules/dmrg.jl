@@ -204,10 +204,8 @@ function SetStartingState(sites, N, d)
 end
 
 function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
-						  DMRGParameters::Vector{Any};
-						  ComputeAllObservables=false,	# Save computation time is less observables are required
-						  ComputeGamma=false,			# Save computation time if b correlator is not needed
-						  ComputeC=false,				# Save computation time if density correlator is not needed
+						  DMRGParameters::Vector{Any},
+						  UserMode::String;
 						  verbose=false,				# Do not print at line
 						  U=1.0,						# Simplify model
 						  FixedN=false,					# Let N vary
@@ -241,8 +239,46 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     nsweeps, maxdim = DMRGParameters[1:2]
     cutoff = DMRGParameters[3]
 
+	# Evaluate UserMode
+	ModeErrorMsg = "Input error: use as argument \"OrderParameters\"
+- \"Correlator\", \"Debug\" or \"Fast\":
+- \"OrderParameters\": return E, nVariance, aAvg;
+- \"Correlator\": return E, Γ, eΓ;
+- \"Debug\": return E, LocalE, nMean, nVariance;
+- \"Fast\": return E."
+	
+	OrderParameters=false
+	Correlator=false
+	Debug=false
+	Fast=false
+	
+	if UserMode=="OrderParameters"
+		OrderParameters=true
+		nVariance = 0		 		# Variance on central site
+   		aAvg = 0		 			# <a> on central site
+	
+	elseif UserMode=="Correlator"
+		Correlator=true
+		# Initialize later
+		
+	elseif UserMode=="Debug"
+		Debug=true
+		nMean = zeros(L)			# Mean number of particles per site
+		nVariance = zeros(L) 		# Variance on n_i, for all sites i
+    	LocalE = zeros(L)			# Local contribution to the energy
+    
+    elseif UserMode == "Fast"
+    	Fast = true
+    		
+	else
+		error(ModeErrorMsg)
+	end
+
     if verbose
-        println("Model parameters: L=$L, N=$N, nmax=$nmax, J=$J, U=$U, μ=$μ")
+    	if !Fast
+    		println("Selected mode: ", UserMode)
+        end
+        println("Model parameters: L=$L, N=$N, nmax=$nmax, J=$J, U=$U, μ=$μ.")
         println("Starting simulation...\n")
     end
 
@@ -278,113 +314,72 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
         		"VarE=$(round(VarE,digits=4))\n")
     end
 
-    # Calculate relevant observables in the ground state
+    if OrderParameters
     
-    nVariance = zeros(L) 			# Variance on n_i, for all sites i
-    aAvg = zeros(L) 			    # < a_i > (possible order parameter for SF)
-    if ComputeAllObservables		# Conditional: save time if not needed
-    	nMean = zeros(L)			# Mean number of particles per site
-    	LocalE = zeros(L)			# Local contribution to the energy
-    end
-
-    for i in 1:L
-    	nVariance[i] = GetNumberVariance(psi, sites, i)
-        aAvg[i] = expect(psi, "a"; sites=i)
-    	if ComputeAllObservables	# Conditional: save time if not needed
-    	    nMean[i] = expect(psi, "n"; sites=i)
-    	    LocalE[i] = inner(psi', GetLocalH(sites, i, J, U, μ), psi)
-    	end
-    end
-
-	# Calculate two-points and density-density correlators  
-    
-    if ComputeGamma || ComputeC || ComputeAllObservables
-
-    	
-        if ComputeGamma || ComputeAllObservables
-
-            """
-            Procedure: discard half of the lattice (the first quarter and the last);
-            what remains is used as a domain to sweep across, collecting 
-            symmetrically two-points and density-density correlators; these last
-            are then avereaged; error is taken as the statistical standard 
-            deviation.
-            """
-            
-            Trash = floor(Int64, L/4)	# How many to discard from each side?
-            Start = Trash+1				# Start of useful segment
-            Stop = L-Trash				# End of useful segment
-            
-            Segment = L-2*Trash			# Segment length
-            Spacings = collect(Int64, 2:2:Segment)
-
-
-            Γ = zeros(Float64, length(Spacings))
-            eΓ = zeros(Float64, length(Spacings))
-            
-            # (Center) symmetric sweep for Γ
-            for r in Spacings
-
-                ΓTmpArray = [] # stores the different Γ(r)
-
-                i = Start
-                j = Start+r-1
-
-                while j<=Stop
-                    ΓOp = GetTwoPointCorrelator(sites, i, j)
-                    ΓTmp = inner(psi', ΓOp, psi)
-                    push!(ΓTmpArray, ΓTmp)	
-
-                    i += 1
-                    j += 1   
-                end
-
-                Γ[Int64(r/2)] = mean(ΓTmpArray)
-                eΓ[Int64(r/2)] = std(ΓTmpArray)
-            end
-        end
-
-    	# Conditional initializion (partitioned)
-    	if ComputeC || ComputeAllObservables
-
-			C = zeros(Float64, L-1)
-			eC = zeros(Float64, L-1)
-
-            CTmpArray = [] # Stores C(r) for the different sites
-
-            for r in 1:(L-1)
-                i = 1
-                j = i + r
-
-                while j <= L
-                    CTmp = GetNumberCorrelator(psi, sites, i, j)
-                    push!(CTmpArray, CTmp)
-                    i += 1
-                    j += 1
-                end
-
-                C[r] = mean(CTmpArray)
-                eC[r] = std(CTmpArray)
-            end
-        end
-    end
-
-	# Julia composition of matrices: [a b [c d]] = [a b c d]
-	
-	if ComputeAllObservables
-	    return E, nVariance, aAvg, Γ, eΓ, C, eC, nMean, LocalE, psi
-	
-	elseif ComputeGamma || ComputeC
-		if !ComputeGamma
-			return E, nVariance, aAvg, C, eC 
-		elseif !ComputeC
-			return E, nVariance, aAvg, Γ, eΓ 
-		else	# ComputeAllObservables: already evaluated
-			return E, nVariance, aAvg, Γ, eΓ, C, eC
-		end
-	else
+    	Index = ceil(Int64, L/2)
+		nVariance = GetNumberVariance(psi, sites, Index)
+	    aAvg = expect(psi, "a"; sites=Index)
+		
 		return E, nVariance, aAvg
-	end
+    
+    elseif Correlator
+
+		"""
+		Procedure: discard half of the lattice (the first quarter and the last);
+		what remains is used as a domain to sweep across, collecting 
+		symmetrically two-points and density-density correlators; these last
+		are then avereaged; error is taken as the statistical standard 
+		deviation.
+		"""
+		
+		Trash = floor(Int64, L/4)	# How many to discard from each side?
+		Start = Trash+1				# Start of useful segment
+		Stop = L-Trash				# End of useful segment
+		
+		Segment = L-2*Trash			# Segment length
+		Spacings = collect(Int64, 2:2:Segment)
+
+		Γ = zeros(Float64, length(Spacings))
+		eΓ = zeros(Float64, length(Spacings))
+		
+		# (Center) symmetric sweep for Γ
+		for r in Spacings
+
+		    ΓTmpArray = [] # stores the different Γ(r)
+
+		    i = Start
+		    j = Start+r-1
+
+		    while j<=Stop
+		        ΓOp = GetTwoPointCorrelator(sites, i, j)
+		        ΓTmp = inner(psi', ΓOp, psi)
+		        push!(ΓTmpArray, ΓTmp)	
+
+		        i += 1
+		        j += 1   
+		    end
+
+		    Γ[Int64(r/2)] = mean(ΓTmpArray)
+		    eΓ[Int64(r/2)] = std(ΓTmpArray)
+        end
+        
+        eΓ[end] = eΓ[end-1] # Correct NaN
+		
+        return E, Γ, eΓ
+    
+    elseif Debug
+	    
+	    for i in 1:L
+			nMean[i] = expect(psi, "n"; sites=i)
+			nVariance[i] = GetNumberVariance(psi, sites, i)
+			LocalE[i] = inner(psi', GetLocalH(sites, i, J, U, μ), psi)
+    	end
+    	
+    	return E, nMean, nVariance, LocalE
+    	
+    elseif Fast
+    	return E
+    end
 end
 
 # ------------------------------------------------------------------------------
@@ -394,8 +389,8 @@ end
 function main()
 
 	"""
-    Run DMRG for different algorithm parameters, to check how many sweeps are
-    sufficient for convergence.
+    If the script is called directly from terminal, run one full DMRG routineù
+    with the following parameters.
     """
     
     L = 10
@@ -408,22 +403,67 @@ function main()
     maxlinkdim = [10,50,75,200,500]
     cutoff = [1E-8]
     DMRGParameters = [nsweep, maxlinkdim, cutoff]
+    
+    UserMode = "OrderParameters" # "OrderParameters" / "Correlator" / "Debug" / "Fast"
 
-    # --------------------------------
-    # --- Results for a single run ---
-    # --------------------------------
+	if UserMode=="Fast"
+		for i in 1:100
+    		print("\r")
+    		for j in 1:i
+    			print(" ")
+    		end
+    		print(">>> Speedin' >>>")
+    		sleep(0.05)
+    	end
+    	print("\n")
+	end
+	
+    # ------------------------ Results for a single run ------------------------
+    
     Observables = RunDMRGAlgorithm([L, N, nmax, J, μ],
-    							    DMRGParameters;
-    								ComputeAllObservables=true, 
+    							    DMRGParameters,
+    							    UserMode; 
     								verbose=true)
-    E, nVariance, aAvg, _, _, _, _, nMean, LocalE, psi = Observables
-
-    println("Results of the simulation:
+    								
+	if UserMode=="OrderParameters"
+		E, nVariance, aAvg = Observables
+		println("Results of the simulation:
+Energy of ground state: $(round.(E, digits=4))
+Number variance on central site: $(round.(nVariance, digits=4))
+Average of <a> on central site: $(round.(aAvg, digits=4))")
+	
+	elseif UserMode=="Correlator"
+		E, Γ, eΓ = Observables
+		println("Results of the simulation:
+Energy of ground state: $(round.(E, digits=4))
+Green's function: $(round.(Γ, digits=4))
+Error on Green's function: $(round.(eΓ, digits=4))")
+		
+	elseif UserMode=="Debug"
+		E, nMean, nVariance, LocalE = Observables
+		println("Results of the simulation:
 Energy of ground state: $(round.(E, digits=4))
 \"Local\" part of energy: $(round.(LocalE, digits=4))
 Mean number of particles: $(round.(nMean, digits=4))
 Variance number of particles: $(round.(nVariance, digits=4))
 Relative fluctuation: $(round.(sqrt.(nVariance)./nMean, digits=4))")
+    	
+	else
+		E = Observables
+		println("Results of the simulation:
+Energy of ground state: $(round.(E, digits=4))")
+
+		for i in 1:100
+    		print("\r")
+    		for j in 1:i
+    			print(" ")
+    		end
+    		print(">>> I'm speed >>>")
+    		sleep(0.05)
+    	end
+    	print("\n")
+	end
+
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__ # equivalent to if __name__ == "__main__"
