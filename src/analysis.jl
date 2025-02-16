@@ -80,7 +80,7 @@ function main()
         
             global HorizontalLL, RectangularLL # Imported from setup
 
-            μ0 = 0.0 #Horizontalμμ[3] # CHANGE!
+            μ0 = Horizontalμμ[1] # CHANGE!
             rrMin = [2, 4, 6, 8]
             rrMax = [12, 14, 16, 18]
             # FitRange = 10

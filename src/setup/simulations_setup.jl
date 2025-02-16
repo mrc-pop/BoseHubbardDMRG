@@ -25,7 +25,7 @@ Resolution = Dict([
 # Horizontal sweeps
 HorizontalLL = [10, 20, 30, 40, 50, 60, 70] 
 HorizontalJJ = collect(range(start=0.0, stop=0.35, length=Resolution["High"]))
-Horizontalμμ = [0.2, 0.4, 0.6, 0.8]
+Horizontalμμ = [0.6, 0.8]
 
 # Rectangular sweeps
 RectangularLL = [20] # [10, 15, 20] 

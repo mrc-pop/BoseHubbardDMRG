@@ -284,8 +284,8 @@ function PlotPowerLawGamma(FilePathIn::String,
     data = readdlm(FilePathIn, ';', '\n'; comments=true)
 
     # Extract unique J, L values
-    JJ = unique(data[:, 2])
     LL = unique(data[:, 1])
+    JJ = unique(data[:, 2])
 
     println("\nPlotting correlation function.")
     println("From input file, there are $(length(JJ)) possible values of J.")
@@ -294,7 +294,7 @@ function PlotPowerLawGamma(FilePathIn::String,
     function parse_array(str)
         return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
     end
-    Γall = [parse_array(row[7]) for row in eachrow(data)]
+    Γall = [parse_array(row[4]) for row in eachrow(data)]
 
     if overwrite
         plot()
@@ -357,13 +357,15 @@ function PlotFitResultsK(FilePathIn::String,
     JJ = unique(FittedData[:, 1])
     rrMax = unique(FittedData[:, 3])
     rrMin = unique(FittedData[:, 2]) # there should be only 1 unique value
-    
-    rMin = Int64(rrMin[1])
 
-    if length(rMin) != 1
-        print("Error! More than one rMin. Which should I put in the title?")
-        return
-    end
+    rMin = Int64(rrMin[3]) # TODO change
+
+    println("Chosen rMin = $rMin")
+
+    # if length(rrMin) != 1
+    #     print("Error! More than one rMin. Which one should I put in the title?")
+    #     return
+    # end
     
     AllK_∞ = FittedData[:,4]
     e_AllK_∞ = FittedData[:,4]
@@ -372,7 +374,7 @@ function PlotFitResultsK(FilePathIn::String,
 
     for rMax in rrMax
         # Filter data corresponding to the current rMin
-        Filter = (FittedData[:, 3] .== rMax)
+        Filter = (FittedData[:, 3] .== rMax) .& (FittedData[:, 2] .== rMin)
         K_∞ = AllK_∞[Filter]
         e_K_∞ = e_AllK_∞[Filter]
 

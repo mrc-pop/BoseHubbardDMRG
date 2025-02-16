@@ -239,8 +239,8 @@ function FitRoutineGamma(FilePathIn,
     function ParseArray(str)
         return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
     end
-    Γall = [ParseArray(row[7]) for row in eachrow(HorizontalData)]
-    eΓall = [ParseArray(row[8]) for row in eachrow(HorizontalData)]
+    Γall = [ParseArray(row[4]) for row in eachrow(HorizontalData)]
+    eΓall = [ParseArray(row[5]) for row in eachrow(HorizontalData)]
 
     # Open output file
     DataFile = open(FilePathOut, "w")
