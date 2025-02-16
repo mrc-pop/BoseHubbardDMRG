@@ -214,22 +214,29 @@ function PlotPhaseBoundaries(FilePathIn::String;
     	plot!(JJ, [zeros(length(JJ)) ΔEp],
 			  linewidth=0,
 			  fillrange=[-ΔEm ones(length(JJ))],
-			  fillcolor=MyColors[2],
-			  fillalpha=0.15,
-			  label=nothing)
+			  fillcolor="red",
+			  fillalpha=0.1,
+			  label=nothing,
+              xlimits=(minimum(JJ), maximum(JJ)),
+              ylimits=(minimum(-ΔEm), maximum(ΔEp)),
+              xlabel=L"$J$",
+              ylabel=L"$\mu$",
+              title="Phases of the model")
     	
     	plot!(JJ, -ΔEm,
 			  linewidth=0,
 			  fillrange=ΔEp,
-			  fillcolor=MyColors[end],
-			  fillalpha=0.15,
+			  fillcolor="blue",
+			  fillalpha=0.1,
 			  label=nothing)
 			  
-		annotate!(0.06,0.5,"MI",color=MyColors[end])
-    	
+		annotate!(0.07, 0.35, text(L"MI ($\rho=1$)", 10))
+        annotate!(0.18, 0.62, text("SF", 10))
+        annotate!(0.18, 0.09, text("SF", 10))
+
         plot!(JJ, [ΔEp, -ΔEm],
               label=[L"\mu_c^+ \, (L \rightarrow \infty)" L"\mu_c^- \, (L \rightarrow \infty)"],
-              color=[MyColors[end] MyColors[end]],
+              color=["black" "black"],
               linestyle=[:dash :dashdot])
     end
 
@@ -279,6 +286,8 @@ function PlotPowerLawGamma(FilePathIn::String,
                            j::Int64;
                            FilePathOut="",
                            overwrite=true)
+
+    plot()
 
     # Read the input data
     data = readdlm(FilePathIn, ';', '\n'; comments=true)
@@ -339,9 +348,119 @@ function PlotPowerLawGamma(FilePathIn::String,
     end
 end
 
-# function PlotFittedDataGamma()
+"""
+Make a qualitative plot to put in the report: Gamma(r) vs r for different values
+of J, showing the MI-SF crossing when from exponential Gamma becomes power-law
+"""
+function PlotCorrelationFunctionsMIvsSF(FilePathIn::String;
+                                        FilePathOut1="",
+                                        FilePathOut2="",
+                                        PhaseBoundariesFilePath="",
+                                        L=70,
+                                        μ0=0.6,
+                                        JMin = 0.1,
+                                        JMax = 0.35)
+    plot()
+
+    # Read the input data
+    data = readdlm(FilePathIn, ';', '\n'; comments=true)
+
+    # Extract unique J, L values
+    LL = unique(data[:, 1])
+    JJ = unique(data[:, 2])
+
+    # Select the couplings
+    JJ = JJ[ (JJ .>= JMin) .& (JJ .<= JMax) ]
+
+    # Mastruzzo to extract array of Γ
+    function parse_array(str)
+        return parse.(Float64, split(strip(str, ['[', ']', ' ']), ','))
+    end
+    Γall = [parse_array(row[4]) for row in eachrow(data)]
+
+    for (j, J) in enumerate(JJ)
+        # Filter data for the current J and L
+        filter = (data[:, 2] .== J) .& (data[:, 1] .== L)
+
+        # Extract the correlators {Γ(r,J,L)}_r for the selected J,L
+        Γeven = Γall[filter][1] # this is an array, Γ(r even)
+        r = range(start=2, step=2, length=length(Γeven)) # r even
+
+        # Check if Γeven has at least two elements
+        if length(Γeven) < 2
+            println("Warning: Not enough data points for L = $L. Skipping.")
+            continue
+        end
+
+        J_round = round(J, digits=3)
+
+        scatter!(r, Γeven,
+            xlabel=L"$r$",
+            ylabel=L"$\Gamma(r)$",
+            title=L"Correlation function ($L=%$L, \mu_0 = %$μ0$)",
+            label=L"J=%$J_round",
+            markersize=2,
+            xscale=:log10,
+            yscale=:log10,  
+            xticks=[1,10,100],
+            xlimits=(1,100),
+            legend=:bottomleft)
+    end
+
+    if FilePathOut1 != ""
+        savefig(FilePathOut1)
+        println("First plot saved on file.")
+    else
+        gui()
+    end
+
+    if PhaseBoundariesFilePath != ""
+        # NOTE: the code works if the μ0 = 0.0 boundaries data are used.
+        # gr()
+        plot()
+
+        BoundariesData = readdlm(PhaseBoundariesFilePath, ';', '\n'; comments=true)
+        LL = unique(BoundariesData[:, 1])
     
-# end
+        L_PB_index = argmin(abs.(LL .- L)) # best approximation of L
+        L_PhaseBoundaries = LL[L_PB_index]
+    
+        if L_PhaseBoundaries !== L
+            println("L=$L is not among horizontal data. Using the closest available size, L=$L_PhaseBoundaries. (μ0=$μ0)")
+        end
+    
+        # Filter data corresponding to L_PhaseBoundaries
+        indices = (BoundariesData[:, 1] .== L_PhaseBoundaries)
+        JJ_PB = BoundariesData[indices, 2]
+        μUp = BoundariesData[indices, 4]
+        μDown = BoundariesData[indices, 5]
+        
+        plot!(JJ_PB, -μDown, 
+            label=L"$\mu_c^\pm$",
+            seriestype=:scatter,
+            markersize=1.5,
+            color="black",
+            xlabel=L"$J$",
+            ylabel=L"$\mu$",
+            title=L"Phase boundaries ($L=%$L, \mu_0=%$μ0$)"
+            )
+        plot!(JJ_PB, μUp, seriestype=:scatter,
+            label="",
+            markersize=1.5,
+            color="black",
+            )
+
+        vspan!([minimum(JJ), maximum(JJ)]; alpha=0.2, color=MyColors[4], label=nothing)
+        plot!([minimum(JJ), maximum(JJ)], [0.6, 0.6], color=MyColors[4], label=L"$(J,\mu_0)$")
+
+        if FilePathOut2 != ""
+            savefig(FilePathOut2)
+            println("Second plot saved on file.")
+        else
+            gui()
+        end
+    end
+end
 
 """
 Read the fit results from txt.
@@ -358,9 +477,9 @@ function PlotFitResultsK(FilePathIn::String,
     rrMax = unique(FittedData[:, 3])
     rrMin = unique(FittedData[:, 2]) # there should be only 1 unique value
 
-    rMin = Int64(rrMin[3]) # TODO change
+    rMin = Int64(rrMin[2]) # TODO change
 
-    println("Chosen rMin = $rMin")
+    println("Chosen rMin = $rMin (from PlotFitResultsK)")
 
     # if length(rrMin) != 1
     #     print("Error! More than one rMin. Which one should I put in the title?")

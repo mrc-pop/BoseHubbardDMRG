@@ -37,7 +37,6 @@ function GetHamiltonian(sites, J::Float64, U::Float64, μ::Float64; pbc=false)
 end
 
 # Local hamiltonian
-# TODO Evaluate if full hamiltonian can be obtained by calling GetLocalH
 
 function GetLocalH(sites, i, J::Float64, U::Float64, μ::Float64)
     """
@@ -122,7 +121,7 @@ end
 
 # Number variance operator per site
 
-function GetNumberVariance(psi, sites, i::Int64)
+function GetNumberVariance(psi::MPS, sites, i::Int64)
     """
     Calculate the variance of the number of particles on site `i` for the state
     `psi`.
@@ -163,6 +162,25 @@ function GetVonNeumannEntropy(psi::MPS, sites, i::Int64)
       SvN -= p * log(p)
     end
     return SvN
+end
+
+# Local population
+
+function GetLocalPopulation(psi::MPS, d::Int64)
+	"""
+	Get the local population for each site and for each boson state, save it
+	into a matrix.
+	"""
+	L = length(psi)
+	Populations=zeros(L,d)
+	KMatrix = zeros(d,d)
+	for k in 1:d
+		KMatrix[k,k] = 1
+		Populations[:,k] = expect(psi,KMatrix)
+		KMatrix[k,k] = 0 
+	end
+	
+	return Populations
 end
 
 # ------------------------------------------------------------------------------
@@ -370,12 +388,14 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     elseif Debug
 	    
 	    for i in 1:L
-			nMean[i] = expect(psi, "n"; sites=i)
+	    	# Locally defined
+	    	nMean[i] = expect(psi, "n"; sites=i)
 			nVariance[i] = GetNumberVariance(psi, sites, i)
 			LocalE[i] = inner(psi', GetLocalH(sites, i, J, U, μ), psi)
     	end
+    	Populations = GetLocalPopulation(psi, d)
     	
-    	return E, nMean, nVariance, LocalE
+    	return E, nMean, nVariance, LocalE, Populations
     	
     elseif Fast
     	return E
@@ -404,7 +424,7 @@ function main()
     cutoff = [1E-8]
     DMRGParameters = [nsweep, maxlinkdim, cutoff]
     
-    UserMode = "OrderParameters" # "OrderParameters" / "Correlator" / "Debug" / "Fast"
+    UserMode = "Debug" # "OrderParameters" / "Correlator" / "Debug" / "Fast"
 
 	if UserMode=="Fast"
 		for i in 1:100
@@ -412,7 +432,7 @@ function main()
     		for j in 1:i
     			print(" ")
     		end
-    		print(">>> Speedin' >>>")
+    		printstlyed(">>> Speedin' >>>", color=:cyan)
     		sleep(0.05)
     	end
     	print("\n")
@@ -440,13 +460,14 @@ Green's function: $(round.(Γ, digits=4))
 Error on Green's function: $(round.(eΓ, digits=4))")
 		
 	elseif UserMode=="Debug"
-		E, nMean, nVariance, LocalE = Observables
+		E, nMean, nVariance, LocalE, Populations = Observables
 		println("Results of the simulation:
 Energy of ground state: $(round.(E, digits=4))
 \"Local\" part of energy: $(round.(LocalE, digits=4))
 Mean number of particles: $(round.(nMean, digits=4))
 Variance number of particles: $(round.(nVariance, digits=4))
-Relative fluctuation: $(round.(sqrt.(nVariance)./nMean, digits=4))")
+Relative fluctuation: $(round.(sqrt.(nVariance)./nMean, digits=4))
+Populations: $(round.(Populations, digits=4))")
     	
 	else
 		E = Observables
@@ -458,7 +479,7 @@ Energy of ground state: $(round.(E, digits=4))")
     		for j in 1:i
     			print(" ")
     		end
-    		print(">>> I'm speed >>>")
+    		printstyled(">>> I'm speed >>>", color=:cyan)
     		sleep(0.05)
     	end
     	print("\n")

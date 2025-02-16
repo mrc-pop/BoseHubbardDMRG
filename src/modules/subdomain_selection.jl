@@ -40,22 +40,31 @@ function FindMottTip(FilePathIn::String;
 		
 		x3 = -b/a
 		
+		Jc = x3
+		eJc = (x2-x1)/2
+		
+		# Weighted sum
+		μc = ( ΔEp[Index] * (x2-x3) + ΔEp[Index+1] * (x3-x1) ) / (x2-x1)
+		eμc = ( ΔEp[Index] - ΔEp[Index+1] ) /2
+		
 		# TODO Change steps
 		ReducedXStep = 5*(x2-x1)/2								# Arbitrary
-		Left = round(x3-ReducedXStep, digits=3)
-		Right = round(x3+ReducedXStep, digits=3)
+		Left = round(Jc - ReducedXStep, digits=3)
+		Right = round(Jc + ReducedXStep, digits=3)
 		
 		ReducedYStep = 2*Gap[Index-10]
-		Up = round(ΔEp[Index]+ReducedYStep, digits=3)
-		Down = round(ΔEp[Index]-ReducedYStep, digits=3)	# Arbitrary
+		Up = round(μc + ReducedYStep, digits=3)
+		Down = round(μc - ReducedYStep, digits=3)				# Arbitrary
 		
 		if verbose
 			println("Number of sign changing points: ", length(CrossingIndices))
 			println("Point above: ", Gap[Index])
 			println("Point below; ", Gap[Index+1])
-			println("Gap closes at J: ", x3)
 			println("Restrict simulation to $Left≤J≤$Right, $Down≤μ≤$Up")
 		end
+		
+		println("Gap closes at J: ", round(Jc, digits=5), " +/- ", round(eJc, digits=5))
+		println("Gap closes at μ: ", round(μc, digits=5), " +/- ", round(eμc, digits=5))
 		
 		Selections[i,:] = [Left Right Up Down]
 	end
