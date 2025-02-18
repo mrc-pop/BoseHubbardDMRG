@@ -9,13 +9,14 @@ include(PROJECT_ROOT * "/setup/simulations_setup.jl")
 # Include modules
 include(PROJECT_ROOT * "/modules/fits.jl")
 include(PROJECT_ROOT * "/modules/plots.jl")
+include(PROJECT_ROOT * "/modules/subdomain_selection.jl")
 
 using DelimitedFiles
 using Dates
 
 function main()    
 
-    ModeErrorMsg = "Input error: use option --heatmap, --boundaries, --gamma,
+    ModeErrorMsg = "Input error: use option --heatmap, --boundaries, --gamma, gamma-K
     or --gamma-MISF"
 	
 	if length(ARGS) != 1
@@ -43,10 +44,10 @@ function main()
 
 			for L in LL
 				# TODO Do we need today()?
-                FilePathIn = PROJECT_ROOT * "/../simulations/rectangular_sweep/L=$(L)_site=$(ceil(Int64, L/2)).txt"
+                FilePathIn = PROJECT_ROOT * "/../simulations/rectangular_sweep/L=$(L).txt"
 
 				VarianceFilePathOut = PROJECT_ROOT * "/../analysis/heatmap/variance_L=$(L)_$(today()).pdf" # Variance plot
-	            AFilePathOut = HeatmapDir * "a_L=$(L)_$(today()).pdf"       # <a_i> plot
+	            AFilePathOut = HeatmapDir * "b_L=$(L)_$(today()).pdf"       # <a_i> plot
     	        KFilePathOut = HeatmapDir * "K_L=$(L)_$(today()).pdf"       # K plot
 				
 	            PlotHeatmap(L, FilePathIn; PhaseBoundariesFilePath, VarianceFilePathOut, AFilePathOut)
@@ -58,7 +59,7 @@ function main()
 
         elseif UserMode=="--boundaries"
         	
-			μ0 = 0.0#Horizontalμμ[3] # CHANGE!
+			μ0 = 0.0 #Horizontalμμ[3] # CHANGE!
 
             FilePathIn = PROJECT_ROOT * "/../simulations/boundaries_sweep/μ0=$(μ0)_L=$HorizontalLL.txt"
             PhaseBoundariesDir = PROJECT_ROOT * "/../analysis/phase_boundaries/μ0=$(μ0)/"
@@ -70,6 +71,7 @@ function main()
             FilePathPlotOut = PhaseBoundariesDir * "phaseboundaries_fit_μ0=$(μ0).pdf"
             FilePathSinglePlotOut = PhaseBoundariesDir * "phaseboundaries_fit_single_μ0=$(μ0).pdf"
 
+            # Uncomment the needed analysis.
             #PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut=FilePathPlot, μ0)
             #FitPhaseBoundaries(FilePathIn, FilePathFit; FilePathPlotOut, FilePathSinglePlotOut, μ0)
             PlotPhaseBoundaries(FilePathIn;
@@ -79,6 +81,9 @@ function main()
                 MottLobeFilePath=PROJECT_ROOT * "/../analysis/phase_boundaries/μ0=$μ0/fitted_phase_boundaries_μ0=$μ0.txt",
             )
 
+            FindMottTip(FilePathFit, verbose=true)
+
+
         # ----------------------------------------------------------------------
         # ----------------------- Correlation function Γ -----------------------
         # ----------------------------------------------------------------------
@@ -87,10 +92,9 @@ function main()
         
             global HorizontalLL, RectangularLL # Imported from setup
 
-            μ0 = 0.0 #Horizontalμμ[2] # CHANGE!
+            μ0 = 0.08 # CHANGE!
             rrMin = [2, 4, 6, 8]
             rrMax = [12, 14, 16, 18]
-            # FitRange = 10
             JMin = 0.20
             LMin = 20
 
@@ -114,8 +118,10 @@ function main()
 
             # (Step 3) Plot K_∞ vs J, reading data from Step 1
             FilePathInK = GammaDir * "fitted_Luttinger_parameter_μ0=$μ0.txt"
-            FilePathOutKInfty = GammaDir * "fitted_Luttinger_plot_μ0=$μ0.pdf"
-            PlotFitResultsK(FilePathInK, μ0; FilePathOut=FilePathOutKInfty)
+            for rMin in [2,4,6,8]
+                FilePathOutKInfty = GammaDir * "fitted_Luttinger_plot_μ0=$(μ0)_rMin=$rMin.pdf"
+                PlotFitResultsK(FilePathInK, μ0, rMin; FilePathOut=FilePathOutKInfty)
+            end
         
         elseif UserMode=="--gamma-MISF"
             global HorizontalLL
@@ -132,6 +138,20 @@ function main()
             PlotCorrelationFunctionsMIvsSF(FilePathIn; μ0, JMin=0.10, JMax=0.15, L=70, PhaseBoundariesFilePath,
                 FilePathOut1, FilePathOut2)
         
+        elseif UserMode=="--gamma-K"
+            # Make an illustrative plot of K_∞ vs J, for one
+            # rMin and one rMax, chosen with the definitions below.
+
+            global HorizontalLL
+            μ0 = 0.0
+            rMin = 8 
+            rMax = 18
+
+            GammaDir = PROJECT_ROOT * "/../analysis/gamma/μ0=$(μ0)/"
+            FilePathInK = GammaDir * "fitted_Luttinger_parameter_μ0=$μ0.txt"
+            FilePathOutKInfty = GammaDir * "illustrative_K_μ0=$μ0.pdf"
+            PlotIllustrativeResultK(FilePathInK, μ0, rMin, rMax; FilePathOut=FilePathOutKInfty)
+
 		else
 			error(ModeErrorMsg)
 			exit()

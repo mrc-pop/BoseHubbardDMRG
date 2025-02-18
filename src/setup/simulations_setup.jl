@@ -28,7 +28,7 @@ HorizontalJJ = collect(range(start=0.0, stop=0.35, length=Resolution["High"]))
 Horizontalμμ = [0.6, 0.8]
 
 # Rectangular sweeps
-RectangularLL = [20] # [10, 15, 20] 
+RectangularLL = [10] # [10, 15, 20] 
 RectangularJJ = collect(range(start=0.0, stop=0.35, length=Resolution["Medium"]))
 Rectangularμμ = collect(range(start=0.0, stop=1.0, length=Resolution["Medium"]))
 

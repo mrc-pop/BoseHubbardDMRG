@@ -116,8 +116,8 @@ function RectangularSweep(L::Int64,
     					  FilePathIn::String,				# To evaluate if a given point is MI or SF
     					  FilePathOut::String)				# Save computation time if correlators are not needed
     """
-    Calculate the variance of the number of particles on site i for a range of
-    hopping J and chemical potential μ values. Results are saved to a file.
+    Calculate the variance of the number of particles on site i and ⟨b_i⟩ for a
+    range of hopping J and chemical potential μ values. Results are saved to a file.
     """
     
     DataFile = open(FilePathOut,"a")

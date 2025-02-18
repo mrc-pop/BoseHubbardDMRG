@@ -48,7 +48,8 @@ function PlotHeatmap(L::Int64,
         heatmap(unique(JJ), unique(μμ), Variances, 
                 xlabel=L"J",
                 ylabel=L"μ",
-                title=L"Variance $\delta n_i^2$ ($L=%$L, i=%$i$)")
+                title=L"Variance $\delta n_i^2$ ($L=%$L, i=%$i$)",
+                color=:bluesreds)
         ylabel!(L"μ")
 
         if PhaseBoundariesFilePath != ""
@@ -64,7 +65,8 @@ function PlotHeatmap(L::Int64,
         heatmap(unique(JJ), unique(μμ), OrderParameters, 
                 xlabel=L"J",
                 ylabel=L"μ",
-                title=L"$\langle a_i \rangle$ ($L=%$L, i=%$i$)")
+                title=L"$\langle \hat b_i \rangle$ ($L=%$L, i=%$i$)",
+                color=:bluesreds)
 
         # Add phase boundaries
         if PhaseBoundariesFilePath != ""
@@ -117,16 +119,16 @@ function HeatmapAddPhaseBoundaries(PhaseBoundariesFilePath::String,
     μDown = BoundariesData[indices, 5]
     
     plot!(JJ_PB, -μDown .+ 2 * μ0, 
-        label=L"$L=%$L_PhaseBoundaries$",
+        label=nothing,#"$L=%$L_PhaseBoundaries$",
         seriestype=:scatter,
         markersize=1.5,
-        color="gray70",
+        color="black",
         xlimits=(minimum(JJ), maximum(JJ)),
         ylimits=(minimum(μμ), maximum(μμ)))
     plot!(JJ_PB, μ0 .+ μUp, seriestype=:scatter,
-        label="",
+        label=nothing,
         markersize=1.5,
-        color="gray70",
+        color="black",
         xlimits=(minimum(JJ), maximum(JJ)),
         ylimits=(minimum(μμ), maximum(μμ)))      
 end
@@ -230,14 +232,21 @@ function PlotPhaseBoundaries(FilePathIn::String;
 			  fillalpha=0.1,
 			  label=nothing)
 			  
+        # MI / SF text
 		annotate!(0.07, 0.35, text(L"MI ($\rho=1$)", 10))
         annotate!(0.18, 0.62, text("SF", 10))
         annotate!(0.18, 0.09, text("SF", 10))
 
+        # Phase boundaries
         plot!(JJ, [ΔEp, -ΔEm],
               label=[L"\mu_c^+ \, (L \rightarrow \infty)" L"\mu_c^- \, (L \rightarrow \infty)"],
               color=["black" "black"],
               linestyle=[:dash :dashdot])
+
+        # Intersection point (Mott tip)
+        scatter!([0.308], [0.080], markersize=1.5, xerr=[0.004], yerr=[0.008],
+            label="Intersection", color="blue", msw=0.5, markerstrokecolor="blue")
+
     end
 
 	if DrawHorizontalSweeps
@@ -467,7 +476,8 @@ Read the fit results from txt.
 Plot the results of the fits, i.e., K_∞ vs J, for all the rMin, rMax available.
 """
 function PlotFitResultsK(FilePathIn::String,
-                         μ0::Float64;
+                         μ0::Float64,
+                         rMin::Int64;
                          FilePathOut="")
     # Read the input data
     FittedData = readdlm(FilePathIn, ',', '\n'; comments=true)
@@ -475,11 +485,9 @@ function PlotFitResultsK(FilePathIn::String,
     # Extract unique J, rMin values
     JJ = unique(FittedData[:, 1])
     rrMax = unique(FittedData[:, 3])
-    rrMin = unique(FittedData[:, 2]) # there should be only 1 unique value
+    rrMin = unique(FittedData[:, 2])
 
-    rMin = Int64(rrMin[2]) # TODO change
-
-    println("Chosen rMin = $rMin (from PlotFitResultsK)")
+    println("Chosen rMin = $rMin")
 
     # if length(rrMin) != 1
     #     print("Error! More than one rMin. Which one should I put in the title?")
@@ -507,6 +515,8 @@ function PlotFitResultsK(FilePathIn::String,
 
     end
 
+    hline!([0.5], label=L"$K_c=1/2$", color="black", linestyle=:dash)
+
     if FilePathOut != ""
         savefig(FilePathOut)
         println("\nPlot of K_∞ vs J plotted to ", FilePathOut)
@@ -514,6 +524,41 @@ function PlotFitResultsK(FilePathIn::String,
         gui()  
     end
 end
+
+function PlotIllustrativeResultK(FilePathIn::String,
+                                 μ0::Float64,
+                                 rMin::Int64, 
+                                 rMax::Int64;
+                                 FilePathOut="")
+
+        # Read the input data
+        FittedData = readdlm(FilePathIn, ',', '\n'; comments=true)
+
+        # Extract unique J values
+        JJ = unique(FittedData[:, 1])
+
+        # Extract K_∞ for chosen rMin and rMax
+        Filter = (FittedData[:, 3] .== rMax) .& (FittedData[:, 2] .== rMin)
+        K_∞ = FittedData[Filter,4]
+        e_K_∞ = FittedData[Filter,5]
+
+        scatter!(JJ, K_∞,
+        yerr=e_K_∞,
+        xlabel=L"$J$",
+        ylabel=L"$K_\infty$",
+        title=L"Luttinger parameter vs $J$ ($\mu_0 = %$μ0$, $%$rMin \le r \le %$rMax$)",
+        label=nothing,
+        markersize=2,
+        color="black",
+        legend=:topright)
+
+        if FilePathOut != ""
+            savefig(FilePathOut)
+            println("Illustrative plot saved on file.")
+        else
+            gui()
+        end
+    end
 
 # ------------------------ Selection plot for check ----------------------------
 
