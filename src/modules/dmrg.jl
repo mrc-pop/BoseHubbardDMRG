@@ -143,20 +143,25 @@ end
 
 # Von Neumann entropy
 
-function GetVonNeumannEntropy(psi::MPS, sites, i::Int64)
+function GetVonNeumannEntropy(psi::MPS, sites, b::Int64)
     """
-    Calculate Von Neumann entropy of the bipartition `1, ..., i` and `i+1, ..., L`,
-    tracing `psi` on all other sites,
+    Calculate Von Neumann entropy across bond b; which is, the bipartite entropy
+    for the bipartition (1,...,b) -- (b+1,...,L).
     """
     # Perform SVD to all states except i, to prepare for calculating a local observable (end of Lect 4 page 4)
-    orthogonalize!(psi, i)
+    orthogonalize!(psi, b)
 
     # First argument: the tensor on which to perform the SVD, i.e. psi[i]
     # Second argument: the indices on which to perform the SVD, i.e. linkind(psi, i-1) and sites[i] (left link and vertical link)
-    _, S = svd(psi[i], (linkind(psi, i-1), sites[i]))
+    
+    if b==1
+	  _, S, _ = svd(psi[b], (sites[b],))
+	else
+	  _, S, _ = svd(psi[b], (linkind(psi, b-1), sites[b]))
+	end
 
     # S is the diagonal matrix containing the singular values
-    SvN = 0.0 # von Neumann entropy
+    SvN = 0.0 				# von Neumann entropy
     for n in 1:dim(S, 1)
       p = S[n,n]^2
       SvN -= p * log(p)
@@ -281,9 +286,11 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
 		
 	elseif UserMode=="Debug"
 		Debug=true
-		nMean = zeros(L)			# Mean number of particles per site
-		nVariance = zeros(L) 		# Variance on n_i, for all sites i
-    	LocalE = zeros(L)			# Local contribution to the energy
+		nMean = zeros(L)				# Mean number of particles per site
+		nVariance = zeros(L) 			# Variance on n_i, for all sites i
+    	LocalE = zeros(L)				# Local contribution to the energy
+    	Populations = zeros(L,nmax+1) 	# Single site populations
+    	Entropy = zeros(L-1)			# Bipartite entropy
     
     elseif UserMode == "Fast"
     	Fast = true
@@ -386,7 +393,7 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
         return E, Γ, eΓ
     
     elseif Debug
-	    
+		
 	    for i in 1:L
 	    	# Locally defined
 	    	nMean[i] = expect(psi, "n"; sites=i)
@@ -395,7 +402,12 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     	end
     	Populations = GetLocalPopulation(psi, d)
     	
-    	return E, nMean, nVariance, LocalE, Populations
+    	for b in 1:L-1
+    		# Compute entropy for all possible bipartitions
+    		Entropy[b] = GetVonNeumannEntropy(psi, sites, b)
+    	end
+    	
+    	return E, nMean, nVariance, LocalE, Populations, Entropy
     	
     elseif Fast
     	return E
@@ -413,11 +425,11 @@ function main()
     with the following parameters.
     """
     
-    L = 10
-    N = 10
-    nmax = 3
-    J = 0.4
-    μ = 1.0
+    L = 30
+    N = 30
+    nmax = 4
+    J = 0.06		# MI: 0.06 / SF: 0.33
+    μ = 0.4			# MI: 0.4 / SF: 0.8
 
     nsweep = 10
     maxlinkdim = [10,50,75,200,500]
@@ -432,7 +444,7 @@ function main()
     		for j in 1:i
     			print(" ")
     		end
-    		printstlyed(">>> Speedin' >>>", color=:cyan)
+    		printstyled(">>> Speedin' >>>", color=:cyan)
     		sleep(0.05)
     	end
     	print("\n")
@@ -443,7 +455,9 @@ function main()
     Observables = RunDMRGAlgorithm([L, N, nmax, J, μ],
     							    DMRGParameters,
     							    UserMode; 
-    								verbose=true)
+    								verbose=true,
+    								FixedN=false,
+    								RandomPsi0=false)
     								
 	if UserMode=="OrderParameters"
 		E, nVariance, aAvg = Observables
@@ -460,14 +474,15 @@ Green's function: $(round.(Γ, digits=4))
 Error on Green's function: $(round.(eΓ, digits=4))")
 		
 	elseif UserMode=="Debug"
-		E, nMean, nVariance, LocalE, Populations = Observables
+		E, nMean, nVariance, LocalE, Populations, Entropy = Observables
 		println("Results of the simulation:
 Energy of ground state: $(round.(E, digits=4))
 \"Local\" part of energy: $(round.(LocalE, digits=4))
 Mean number of particles: $(round.(nMean, digits=4))
 Variance number of particles: $(round.(nVariance, digits=4))
 Relative fluctuation: $(round.(sqrt.(nVariance)./nMean, digits=4))
-Populations: $(round.(Populations, digits=4))")
+Populations: $(round.(Populations, digits=4))
+Bipartite entropy: $(round.(Entropy, digits=4))")
     	
 	else
 		E = Observables
