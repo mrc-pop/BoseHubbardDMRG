@@ -3,8 +3,9 @@
 using DelimitedFiles
 
 PROJECT_ROOT = @__DIR__
-include(PROJECT_ROOT * "/dmrg.jl")
 include(PROJECT_ROOT * "/../setup/graphic_setup.jl")
+include(PROJECT_ROOT * "/dmrg.jl")
+include(PROJECT_ROOT * "/plots.jl")
 PROJECT_ROOT *= "/../.."
 
 function GetStateProperties(FilePathOut::String,
@@ -29,91 +30,10 @@ function GetStateProperties(FilePathOut::String,
 	# --------------------------------- Write ----------------------------------
 
 	DataFile = open(FilePathOut, "a")
-	write(DataFile, "$ConserveNumber; $E; $LocalE; $nMean; $nVariance; $P; $S;\n")
+	write(DataFile, "$ConserveNumber; $E; $LocalE; $nMean; $nVariance; $P; $S\n")
 	close(DataFile)
 	
 	return Observables
-end
-
-# ----------------------------------- Plots ------------------------------------
-
-function PlotPopulations(DirPathOut::String,
-						 P::Matrix{Float64},
-						 ModelParameters::Vector{Float64},
-						 SF::Bool,				# Redundant?
-						 ConserveNumber::Bool)
-	
-	L, N, nmax = Int64.(ModelParameters[1:3])
-	J, μ = ModelParameters[4:5]
-	
-	plot(grid=false,
-		 xlabel=L"$i$ (site)",
-		 ylabel=L"$|n\rangle$ (state)",
-		 size = (440, 220),
-		 minorticks = false)
-
-	heatmap!(1:size(P,1), 0:(size(P,2)-1), P', clim=(0,1),
-			 label=L"$\mathrm{Tr}\lbrace | i;n \rangle \langle i;n | \rho \rbrace$",
-			 legend=true,
-			 color=:coolwarm)
-
-	# Draw by hand: grid
-	m, n = size(P')
-	vline!(0.5:(n+0.5), c=:black, alpha=0.2, linewidth=0.2, label=false)
-	hline!(-0.5:(m-0.5), c=:black, alpha=0.2, linewidth=0.2, label=false)
-
-	if SF
-		if ConserveNumber
-			title!(L"SF state population (fixed $N=%$N$, $J=%$J$, $\mu=%$μ$)")
-			savefig(DirPathOut * "/SF_J=$(J)_μ=$(μ)_fixedN_populations.pdf")
-		elseif !ConserveNumber
-			title!(L"SF state population (optimal $N$, $J=%$J$, $\mu=%$μ$)")
-			savefig(DirPathOut * "/SF_J=$(J)_μ=$(μ)_free_populations.pdf")
-		end
-	elseif !SF
-		if ConserveNumber
-			title!(L"MI state population (fixed $N=%$N$, $J=%$J$, $\mu=%$μ$)")
-			savefig(DirPathOut * "/MI_J=$(J)_μ=$(μ)_fixedN_populations.pdf")
-		elseif !ConserveNumber
-			title!(L"MI state population (optimal $N$, $J=%$J$, $\mu=%$μ$)")
-			savefig(DirPathOut * "/MI_J=$(J)_μ=$(μ)_free_populations.pdf")
-		end
-	end
-
-end
-
-function PlotBipartiteEntropy(DirPathOut::String,
-						 	  S::Vector{Float64},
-							  ModelParameters::Vector{Float64},
-							  SF::Bool,				# Redundant?
-							  ConserveNumber::Bool)
-	
-	L, N, nmax = Int64.(ModelParameters[1:3])
-	J, μ = ModelParameters[4:5]
-				  
-	scatter([l for l in 1:length(S)], S,
-		 	 xlabel=L"$\ell$ (link index)",
-			 ylabel=L"$S$ (bipartition entropy)",
-			 legend=false)
-
-	if SF
-		if ConserveNumber
-			title!(L"SF bipartite entropy (fixed $N=%$N$, $J=%$J$, $\mu=%$μ$)")
-			savefig(DirPathOut * "/SF_J=$(J)_μ=$(μ)_fixedN_entropy.pdf")
-		elseif !ConserveNumber
-			title!(L"SF bipartite entropy (optimal $N$, $J=%$J$, $\mu=%$μ$)")
-			savefig(DirPathOut * "/SF_J=$(J)_μ=$(μ)_free_entropy.pdf")
-		end
-	elseif !SF
-		if ConserveNumber
-			title!(L"MI bipartite entropy (fixed $N=%$N$, $J=%$J$, $\mu=%$μ$)")
-			savefig(DirPathOut * "/MI_J=$(J)_μ=$(μ)_fixedN_entropy.pdf")
-		elseif !ConserveNumber
-			title!(L"MI bipartite entropy (optimal $N$, $J=%$J$, $\mu=%$μ$)")
-			savefig(DirPathOut * "/MI_J=$(J)_μ=$(μ)_free_entropy.pdf")
-		end
-	end
-
 end
 
 # ----------------------------------- Main -------------------------------------
@@ -147,6 +67,10 @@ function main()
 		
 		ModelParameters = [L, N, nmax, J, μ]
 		
+		DataFile = open(FilePathOut, "w")
+		write(DataFile, "# FixedN; E; LocalE; nMean; nVariance; Populations; Entropy\n")
+		close(DataFile)
+		
 		DirPathOut = PROJECT_ROOT * "/analysis/states_properties/"
 		mkpath(DirPathOut)
 		
@@ -156,13 +80,10 @@ function main()
 			print("Simulation ($Counter/4): SF=$SF and FixedN=$ConserveNumber.")
 	
 			if Compute=="y"
-			DataFile = open(FilePathOut, "w")
-			write(DataFile, "# FixedN; E; LocalE; nMean; nVariance; Populations; Entropy\n")
-			close(DataFile)
 				Observables = GetStateProperties(FilePathOut, ModelParameters, ConserveNumber)
 				_, _, _, _, P, S = Observables
 			elseif Compute=="n"
-				ObservablesData = readdlm(FilePathOut, ';', Any)
+				ObservablesData = readdlm(FilePathOut, ';', Any, comments=true)
 				for Index in 1:2
 					if ObservablesData[Index,1]==ConserveNumber
 						_, _, _, _, P, S = ObservablesData[2:7]
