@@ -47,11 +47,11 @@ function main()
 			for L in LL
                 FilePathIn = PROJECT_ROOT * "/../simulations/rectangular_sweep/L=$(L)_High.txt"
 
-				VarianceFilePathOut = PROJECT_ROOT * "/../analysis/heatmap/variance_L=$(L)_High.pdf" # Variance plot
+				VarianceFilePathOut = HeatmapDir * "variance_L=$(L)_High.pdf" # Variance plot
 	            AFilePathOut = HeatmapDir * "b_L=$(L)_High.pdf"       # <a_i> plot
     	        KFilePathOut = HeatmapDir * "K_L=$(L)_High.pdf"       # K plot
 				
-	            PlotHeatmap(L, FilePathIn; PhaseBoundariesFilePath, VarianceFilePathOut, AFilePathOut)
+	            PlotHeatmap(L, FilePathIn; PhaseBoundariesFilePath, VarianceFilePathOut, AFilePathOut, KFilePathOut)
    			end
             
             FilePathIn = PROJECT_ROOT * "/../simulations/rectangular_sweep/L=$(L)_High.txt"

@@ -22,7 +22,7 @@ function PlotHeatmap(L::Int64,
     JJ = Data[:,1]
     μμ = Data[:,2]
     EE = Data[:,3]
-    varvar = Data[:,5]
+    varvar = Data[:,4]
     aa = Data[:,5]
     kk = Data[:,6]
 
@@ -48,8 +48,7 @@ function PlotHeatmap(L::Int64,
         heatmap(unique(JJ), unique(μμ), Variances, 
                 xlabel=L"J",
                 ylabel=L"μ",
-                title=L"Variance $\delta n_i^2$ ($L=%$L, i=%$i$)",
-                color=:bluesreds)
+                title=L"Variance $\delta n_i^2$ ($L=%$L, i=%$i$)")
         ylabel!(L"μ")
 
         if PhaseBoundariesFilePath != ""
@@ -82,6 +81,12 @@ function PlotHeatmap(L::Int64,
                 xlabel=L"J",
                 ylabel=L"μ",
                 title=L"Compressibility $\kappa$ ($L=%$L, i=%$i$)")
+                
+        # Add phase boundaries
+        if PhaseBoundariesFilePath != ""
+            HeatmapAddPhaseBoundaries(PhaseBoundariesFilePath, L, JJ, μμ)
+        end
+        
         savefig(KFilePathOut)
         println("Compressibility plot for L=$L saved on file!")        
     end
