@@ -34,8 +34,8 @@ Horizontalμμ = [0.6, 0.8]
 # Rectangularμμ = collect(range(start=0.0, stop=1.0, length=Resolution["Medium"]))
 
 RectangularLL = [5] # [10, 15, 20] 
-RectangularJJ = collect(range(start=0.0, stop=0.06, length=Resolution["Low"]))
-Rectangularμμ = collect(range(start=0.4, stop=0.6, length=Resolution["Low"]))
+RectangularJJ = collect(range(start=0.0, stop=0.35, length=Resolution["High"]))
+Rectangularμμ = collect(range(start=0.0, stop=1.0, length=Resolution["High"]))
 
 # Rectangular selection sweeps
 RectangularSelectionLL = [50] # [40, 50, 60]

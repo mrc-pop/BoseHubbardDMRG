@@ -137,7 +137,7 @@ function RectangularSweep(L::Int64,
     	
 		println("\nJ=$J, phase boundaries: μ^+=$μUp, μ^-=$μDown")
 
-		CachedRho = 0
+		CachedRho = 1
 		
         for (m,μ) in enumerate(μμ)
         

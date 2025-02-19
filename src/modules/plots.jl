@@ -40,8 +40,6 @@ function PlotHeatmap(L::Int64,
         OrderParameters[:,jj] = aa[ Numμ*(jj-1)+1 : Numμ*jj ]
         Compressibilities[:,jj] = kk[ Numμ*(jj-1)+1 : Numμ*jj ]	# First row is NaN!
     end
-    
-    display(Compressibilities)
 
     i = (ceil(Int64, L/2)) # site index
 
@@ -78,10 +76,10 @@ function PlotHeatmap(L::Int64,
         savefig(AFilePathOut)
         println("Order parameter plot for L=$L saved on file!")
     end
-
+	
     if KFilePathOut != ""
 		# Plot compressibility
-        heatmap(unique(JJ), unique(μμ)[2:end], Compressibilities[2:end,:], 
+        heatmap(unique(JJ), unique(μμ)[3:end], Compressibilities[3:end,:], 
                 xlabel=L"J",
                 ylabel=L"μ",
                 title=L"Compressibility $\kappa$ ($L=%$L, i=%$i$)")
