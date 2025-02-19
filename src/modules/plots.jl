@@ -9,22 +9,22 @@ in `FilePathIn`.
 function PlotHeatmap(L::Int64,
                      FilePathIn::String;
                      PhaseBoundariesFilePath="",
-                     VarianceFilePathOut="",
-                     AFilePathOut="",
-                     KFilePathOut="")
+                     VarianceFilePathOut="",		# Variance heatmap
+                     AFilePathOut="",				# a heatmap
+                     KFilePathOut="")				# Compressibility heatmap
     
     # Extract data coming from rectangular_sweep
-    VarianceData = readdlm(FilePathIn, ';', '\n'; comments=true)
+    Data = readdlm(FilePathIn, ';', '\n'; comments=true)
     # TODO not uniform ; vs , everywhere
 
-    # display(VarianceData)
+    # display(Data)
 
-    JJ = VarianceData[:,1]
-    μμ = VarianceData[:,2]
-    EE = VarianceData[:,3]
-    varvar = VarianceData[:,4]
-    aa = VarianceData[:,5]
-    # DD = VarianceData[:,10] # Re(D)
+    JJ = Data[:,1]
+    μμ = Data[:,2]
+    EE = Data[:,3]
+    varvar = Data[:,5]
+    aa = Data[:,5]
+    kk = Data[:,6]
 
     NumJ = length(unique(JJ))
     Numμ = length(unique(μμ))
@@ -33,13 +33,15 @@ function PlotHeatmap(L::Int64,
     Variances = zeros(Numμ, NumJ)
     OrderParameters = zeros(Numμ, NumJ)
     FourierTransforms = zeros(Numμ, NumJ)
-
+    Compressibilities = zeros(Numμ, NumJ)
 
     for jj in 1:NumJ
         Variances[:,jj] = varvar[ Numμ*(jj-1)+1 : Numμ*jj ]
         OrderParameters[:,jj] = aa[ Numμ*(jj-1)+1 : Numμ*jj ]
-        # FourierTransforms[:,jj] = DD[ Numμ*(jj-1)+1 : Numμ*jj ]
+        Compressibilities[:,jj] = kk[ Numμ*(jj-1)+1 : Numμ*jj ]	# First row is NaN!
     end
+    
+    display(Compressibilities)
 
     i = (ceil(Int64, L/2)) # site index
 
@@ -78,17 +80,13 @@ function PlotHeatmap(L::Int64,
     end
 
     if KFilePathOut != ""
-        # Plot K extracted from D
-        KMatrix =  1 ./ (FourierTransforms .* L)
-
-        display(KMatrix)
-
-        heatmap(unique(JJ), unique(μμ), KMatrix, 
+		# Plot compressibility
+        heatmap(unique(JJ), unique(μμ)[2:end], Compressibilities[2:end,:], 
                 xlabel=L"J",
                 ylabel=L"μ",
-                title=L"$K$ extracted from $\tilde C(q \to 0)$ ($L=%$L, i=%$i$)")
+                title=L"Compressibility $\kappa$ ($L=%$L, i=%$i$)")
         savefig(KFilePathOut)
-        println("K from D plot for L=$L saved on file!")        
+        println("Compressibility plot for L=$L saved on file!")        
     end
 end
 

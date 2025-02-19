@@ -137,6 +137,8 @@ function RectangularSweep(L::Int64,
     	
 		println("\nJ=$J, phase boundaries: μ^+=$μUp, μ^-=$μDown")
 
+		CachedRho = 0
+		
         for (m,μ) in enumerate(μμ)
         
             ModelParameters = [L, N, nmax, J, μ]
@@ -156,16 +158,36 @@ function RectangularSweep(L::Int64,
 										   "OrderParameters";
 		                                   FixedN=false,
 										   RandomPsi0=false)
-				E, nVariance, aAvg = Results
-		        write(DataFile,"$J; $μ; $E; $nVariance; $aAvg # MI\n")
+				E, NTotAvg, nVariance, aAvg = Results
+				
+				if m>1
+					Rho = NTotAvg/L
+					K = (Rho - CachedRho) / (μ - μμ[m-1])	# Compressibility
+					K /= (Rho^2)
+					CachedRho = Rho							# Next step
+		        elseif m==1
+		        	K = NaN									# Avoid segmentation fault
+		        end
+		        
+		        write(DataFile,"$J; $μ; $E; $nVariance; $aAvg; $K # MI\n")
 		    else
 		    	Results = RunDMRGAlgorithm(ModelParameters,
 				                           DMRGParametersSF,
 				                           "OrderParameters";
 	  		                               FixedN=false,
 										   RandomPsi0=true)
-				E, nVariance, aAvg = Results
-		        write(DataFile,"$J; $μ; $E; $nVariance; $aAvg # SF\n")
+				E, NTotAvg, nVariance, aAvg = Results
+				
+				if m>1
+					Rho = NTotAvg/L
+					K = (Rho - CachedRho) / (μ - μμ[m-1])	# Compressibility
+					K /= (Rho^2)
+					CachedRho = Rho							# Next step
+		        elseif m==1
+		        	K = NaN									# Avoid segmentation fault
+		        end
+				
+		        write(DataFile,"$J; $μ; $E; $nVariance; $aAvg; $K # SF\n")
 		    end
         end
     end

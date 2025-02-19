@@ -1,5 +1,7 @@
 #!/usr/bin/julia
 
+# TODO OLD VERSION
+
 using Dates
 using Plots
 using LaTeXStrings

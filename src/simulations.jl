@@ -131,7 +131,7 @@ function main()
 				DataFile = open(FilePathOut, "w")
 				write(DataFile,"# Hubbard model DMRG. L=$L, N=$N, nmax=$nmax\n")
 				write(DataFile,"# NOTE: Different DMRG settings have been used for MI and SF. Calculation performed on central site.\n")
-				write(DataFile,"# J; μ; E; n_variance; <a> [calculated $(now())]\n")
+				write(DataFile,"# J; μ; E; n_variance; <a>; k[calculated $(now())]\n")
 				close(DataFile)
 				
 				println("Starting calculation of observables for L=$L...")

@@ -50,7 +50,7 @@ function main()
 	            AFilePathOut = HeatmapDir * "b_L=$(L)_$(today()).pdf"       # <a_i> plot
     	        KFilePathOut = HeatmapDir * "K_L=$(L)_$(today()).pdf"       # K plot
 				
-	            PlotHeatmap(L, FilePathIn; PhaseBoundariesFilePath, VarianceFilePathOut, AFilePathOut)
+	            PlotHeatmap(L, FilePathIn; PhaseBoundariesFilePath, VarianceFilePathOut, AFilePathOut, KFilePathOut)
    			end
 
         # ----------------------------------------------------------------------

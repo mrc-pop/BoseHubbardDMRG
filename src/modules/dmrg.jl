@@ -311,7 +311,7 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     d = nmax + 1
     sites = siteinds("Boson", L, dim=d; conserve_number=FixedN)
     H = GetHamiltonian(sites, J, U, μ; pbc)
-    Ntot = GetNumber(sites)
+    NTot = GetNumber(sites)
     
     # Set starting state and print observables
     if RandomPsi0
@@ -321,7 +321,7 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     end
 
     if verbose
-        N0 = inner(psi0', Ntot, psi0)
+        N0 = inner(psi0', NTot, psi0)
         E0 = inner(psi0', H, psi0)
         println("Expectation values on the initial state: N=$N0, E=$E0\n")
     end
@@ -333,8 +333,8 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     # the found ground state is actually an eigenstate of H.
     if verbose
         VarE = inner(H, psi, H, psi) - E^2
-        NtotAvg = inner(psi', Ntot, psi)
-        println("\nFinal N=$(round(NtotAvg, digits=3)), ", 
+		NTotAvg = inner(psi', NTot, psi)
+        println("\nFinal N=$(round(NTotAvg, digits=3)), ", 
         		"E=$(round(E,digits=4)), ",
         		"VarE=$(round(VarE,digits=4))\n")
     end
@@ -342,10 +342,15 @@ function RunDMRGAlgorithm(ModelParameters::Vector{Float64},
     if OrderParameters
     
     	Index = ceil(Int64, L/2)
+    	
+		if !verbose
+			NTotAvg = inner(psi', NTot, psi)
+		end    	
+		
 		nVariance = GetNumberVariance(psi, sites, Index)
 	    aAvg = expect(psi, "a"; sites=Index)
 		
-		return E, nVariance, aAvg
+		return E, NTotAvg, nVariance, aAvg
     
     elseif Correlator
 
