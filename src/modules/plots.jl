@@ -65,8 +65,7 @@ function PlotHeatmap(L::Int64,
         heatmap(unique(JJ), unique(μμ), OrderParameters, 
                 xlabel=L"J",
                 ylabel=L"μ",
-                title=L"$\langle \hat b_i \rangle$ ($L=%$L, i=%$i$)",
-                color=:bluesreds)
+                title=L"$\langle \hat b_i \rangle$ ($L=%$L, i=%$i$)")
 
         # Add phase boundaries
         if PhaseBoundariesFilePath != ""
@@ -118,13 +117,13 @@ function HeatmapAddPhaseBoundaries(PhaseBoundariesFilePath::String,
         label=nothing,#"$L=%$L_PhaseBoundaries$",
         seriestype=:scatter,
         markersize=1.5,
-        color="black",
+        color="white",
         xlimits=(minimum(JJ), maximum(JJ)),
         ylimits=(minimum(μμ), maximum(μμ)))
     plot!(JJ_PB, μ0 .+ μUp, seriestype=:scatter,
         label=nothing,
         markersize=1.5,
-        color="black",
+        color="white",
         xlimits=(minimum(JJ), maximum(JJ)),
         ylimits=(minimum(μμ), maximum(μμ)))      
 end
@@ -280,6 +279,42 @@ function PlotPhaseBoundaries(FilePathIn::String;
     	gui()
     end
 end			 
+
+"""
+Plot the phase boundaries and a specific point.
+"""
+function PlotPointAndPhaseBoundaries(MottLobeFilePath::String)
+
+    MottLobeData = readdlm(MottLobeFilePath, ',', '\n'; comments=true)
+    JJ = MottLobeData[:,1]
+    ΔEp = MottLobeData[:,2]
+    ΔEm = MottLobeData[:,3]
+
+    plot(size=(352, 256))
+
+    # Phase boundaries
+    plot!(JJ, [ΔEp, -ΔEm],
+            #label=[L"\mu_c^+ \, (L \rightarrow \infty)" L"\mu_c^- \, (L \rightarrow \infty)"],
+            label=nothing,
+            color=["black" "black"],
+            xlabel=L"$J$",
+            ylabel=L"$\mu$",
+            background_color = :transparent,
+            minorticks=false)
+            #linestyle=[:dash :dashdot])
+
+    scatter!([0.06], [0.4], markersize=4, marker=:diamond,
+        label=nothing, color=MyColors[4])
+
+    scatter!([0.33], [0.8], markersize=4, marker=:diamond,
+       label=nothing, color=MyColors[4])
+    
+    # MI / SF text
+    annotate!(0.06, 0.48, text("MI", 9))
+    annotate!(0.31, 0.8, text("SF", 9))
+
+    gui()
+end
 
 # ------------------------------------------------------------------------------
 # --------------------------- Correlation functions ----------------------------

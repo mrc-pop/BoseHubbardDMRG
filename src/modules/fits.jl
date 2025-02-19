@@ -293,6 +293,75 @@ function FitRoutineGamma(FilePathIn,
     close(DataFile)
 end
 
+
+"""
+Estimate the fraction of points in a rectangular sweep for which |⟨b_i⟩| > cutoff
+"""
+function EstimateFractionOrderParameter(L::Int64,
+                                        FilePathIn::String,
+                                        PhaseBoundariesFilePath::String,
+                                        Cutoff::Float64;
+                                        verbose=false)
+
+        println("\nPerforming the fraction estimate with L=$L, cutoff=$Cutoff")
+        # Extract data coming from rectangular_sweep
+        VarianceData = readdlm(FilePathIn, ';', '\n'; comments=true)
+        JJ = VarianceData[:,1]
+        μμ = VarianceData[:,2]
+        aa = VarianceData[:,5]
+
+        # Extract phase boundaries data
+        BoundariesData = readdlm(PhaseBoundariesFilePath, ';', '\n'; comments=true)
+        LL = unique(BoundariesData[:, 1])
+
+        if L ∉ LL
+            error("L=$L is not among horizontal data.")
+        end
+
+        # Filter boundaries data corresponding to L
+        indices = (BoundariesData[:, 1] .== L)
+        JJ_PB = BoundariesData[indices, 2]
+
+        NumberMI = 0 # how many points are in the MI phase
+        NumberSFAboveCutoff = 0 # how many points of the SF phase are above cutoff
+
+        for (i,J) in enumerate(JJ) # run over each point of the rect. sweep
+            μ = μμ[i]
+
+            # Find closest J of PB data, and save the corresponding μUp and μDown
+            Index = argmin(abs.(JJ_PB .- J))
+		    μUp = BoundariesData[Index,4][1]
+		    μDown = -BoundariesData[Index,5][1]
+
+            inMottLobe = false
+			
+            if (μ>=μDown && μ<=μUp)
+                inMottLobe = true
+                NumberMI += 1
+            end
+
+            if verbose && i % 50 == 13 # debug
+                println("J=$J, μ=$μ, μDown=$μDown, μUp=$μUp, MI=$inMottLobe")
+            end
+
+            if !inMottLobe # for the SF points
+                if abs(aa[i]) > Cutoff
+                    NumberSFAboveCutoff += 1
+                end
+            end
+        end
+
+        TotalNumber = length(aa)
+        NumberSF = TotalNumber - NumberMI
+        Fraction = NumberSFAboveCutoff / NumberSF
+
+        println("Out of $TotalNumber points, $NumberMI were in the MI phase.")
+        println("Out of the other $NumberSF, exactly $NumberSFAboveCutoff were above",
+            " the cutoff of $Cutoff.")
+        println("Estimated fraction: $Fraction")
+end
+
+
 # """
 # Old function which did it all
 # """

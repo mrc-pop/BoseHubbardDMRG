@@ -35,23 +35,29 @@ function main()
             global HorizontalLL, RectangularLL # Imported from setup
             
 			PhaseBoundariesLL = HorizontalLL
-            LL = RectangularLL               
-
+            LL = RectangularLL
+            L = 10 # TODO CHANGE!             
             μ0 = 0.0 # TODO CHANGE!
+            Cutoff = 0.05 # TODO CHANGE!
 
             PhaseBoundariesFilePath = PROJECT_ROOT * "/../simulations/horizontal_sweep/μ0=$(μ0)_L=$PhaseBoundariesLL.txt"
             HeatmapDir = PROJECT_ROOT * "/../analysis/heatmap/"
 
-			for L in LL
-				# TODO Do we need today()?
-                FilePathIn = PROJECT_ROOT * "/../simulations/rectangular_sweep/L=$(L).txt"
 
-				VarianceFilePathOut = PROJECT_ROOT * "/../analysis/heatmap/variance_L=$(L)_$(today()).pdf" # Variance plot
-	            AFilePathOut = HeatmapDir * "b_L=$(L)_$(today()).pdf"       # <a_i> plot
-    	        KFilePathOut = HeatmapDir * "K_L=$(L)_$(today()).pdf"       # K plot
+			for L in LL
+                FilePathIn = PROJECT_ROOT * "/../simulations/rectangular_sweep/L=$(L)_High.txt"
+
+				VarianceFilePathOut = PROJECT_ROOT * "/../analysis/heatmap/variance_L=$(L)_High.pdf" # Variance plot
+	            AFilePathOut = HeatmapDir * "b_L=$(L)_High.pdf"       # <a_i> plot
+    	        KFilePathOut = HeatmapDir * "K_L=$(L)_High.pdf"       # K plot
 				
-	            PlotHeatmap(L, FilePathIn; PhaseBoundariesFilePath, VarianceFilePathOut, AFilePathOut, KFilePathOut)
+	            PlotHeatmap(L, FilePathIn; PhaseBoundariesFilePath, VarianceFilePathOut, AFilePathOut)
    			end
+            
+            FilePathIn = PROJECT_ROOT * "/../simulations/rectangular_sweep/L=$(L)_High.txt"
+
+            EstimateFractionOrderParameter(L, FilePathIn, PhaseBoundariesFilePath, Cutoff)
+
 
         # ----------------------------------------------------------------------
         # --------------------- Boundary between SF and MI ---------------------
@@ -83,6 +89,10 @@ function main()
 
             FindMottTip(FilePathFit, verbose=true)
 
+        elseif UserMode=="--boundaries-point"
+            μ0 = 0.0
+            MottLobeFilePath=PROJECT_ROOT * "/../analysis/phase_boundaries/μ0=$μ0/fitted_phase_boundaries_μ0=$μ0.txt"
+            PlotPointAndPhaseBoundaries(MottLobeFilePath)
 
         # ----------------------------------------------------------------------
         # ----------------------- Correlation function Γ -----------------------
