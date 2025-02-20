@@ -119,7 +119,7 @@ function main()
 
             # (Step 2) Plot Γ(r) vs r for one  given (J, μ0) ( j ∈ [1, 50] )
             # j = 43 corresponds to J=0.30
-            # !!! NOTE: already plotted for all the μ0 we have. !!!
+            # ! NOTE: already plotted for all the μ0 we have. !
             # for j in 12:2:50
             #     mkpath(GammaDir*"data_plot/")
             #     FileGammaPlot = GammaDir * "data_plot/data_gamma_j=$(j)_μ0=$μ0.pdf"
