@@ -80,11 +80,11 @@ function FitPhaseBoundaries(FilePathIn::String,
 
             # Plot the data and best-fit lines
             round_J = round(J, digits=3)
-            scatter(inv_L, μUp, label=L"$\Delta E^+$ data", xlabel=L"1/L", 
-                ylabel=L"$\Delta E$", title=L"FSS fit results for $J = %$round_J$ ($\mu_0 = %$μ0$)",
+            scatter(inv_L, μUp, label=L"$\Delta^+$ data", xlabel=L"1/L", 
+                ylabel=L"$\Delta^+$", title=L"FSS fit results for $J = %$round_J$ ($\mu_0 = %$μ0$)",
                 legend=:topleft, markersize=2, color=MyColors[1],
                 xlimits=(0.0,maximum(inv_L)*1.1))
-            plot!(fit_x, fit_y_plus, label=L"$\Delta E^+$ fit", color=MyColors[1],
+            plot!(fit_x, fit_y_plus, label=L"$\Delta^+$ fit", color=MyColors[1],
                 alpha=0.7)
             #scatter!(inv_L, -μDown, label=L"$\Delta E^-$ data", markersize=2,
             #    color=MyColors[2])

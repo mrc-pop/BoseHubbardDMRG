@@ -79,7 +79,7 @@ function main()
 
             # Uncomment the needed analysis.
             #PlotPhaseBoundaries(FilePathIn; gap=false, FilePathOut=FilePathPlot, μ0)
-            #FitPhaseBoundaries(FilePathIn, FilePathFit; FilePathPlotOut, FilePathSinglePlotOut, μ0)
+            FitPhaseBoundaries(FilePathIn, FilePathFit; FilePathPlotOut, FilePathSinglePlotOut, μ0)
             PlotPhaseBoundaries(FilePathIn;
                 FilePathOut=PhaseBoundariesDir*"colored_PB.pdf",
                 HideDataPoints=true,
